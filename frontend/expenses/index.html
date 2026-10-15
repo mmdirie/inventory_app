@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Expenses – Apex Inventory</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <link rel="stylesheet" href="/css/custom.css"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+<div id="app-layout">
+  <!-- Layout.init() injects sidebar + navbar here -->
+
+  <div class="p-6 space-y-6">
+
+    <!-- ── PAGE HEADER ─────────────────────────────────────────────── -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800">
+          <i class="fa-solid fa-receipt mr-2 text-blue-600"></i>Expenses
+        </h1>
+        <p class="text-sm text-slate-500 mt-0.5">Track and manage all business expenditures</p>
+      </div>
+      <button id="btn-add-expense"
+        class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow transition">
+        <i class="fa-solid fa-plus"></i> Add Expense
+      </button>
+    </div>
+
+    <!-- ── SUMMARY CARD ────────────────────────────────────────────── -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-dollar-sign text-red-600 text-lg"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Expenses</p>
+          <p id="summary-total" class="text-2xl font-bold text-slate-800">$0.00</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-list text-blue-600 text-lg"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Records</p>
+          <p id="summary-count" class="text-2xl font-bold text-slate-800">0</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-filter text-amber-600 text-lg"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 uppercase tracking-wide font-medium">Active Filters</p>
+          <p id="summary-filters" class="text-2xl font-bold text-slate-800">None</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── FILTERS ─────────────────────────────────────────────────── -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+        <!-- Search -->
+        <div class="lg:col-span-2">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input id="filter-search" type="text" placeholder="Description or notes…"
+              class="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+          </div>
+        </div>
+        <!-- Category -->
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Category</label>
+          <select id="filter-category"
+            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">All Categories</option>
+            <option>Rent</option>
+            <option>Utilities</option>
+            <option>Salaries</option>
+            <option>Transport</option>
+            <option>Marketing</option>
+            <option>Office Supplies</option>
+            <option>Maintenance</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <!-- Payment Method -->
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Payment Method</label>
+          <select id="filter-payment"
+            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">All Methods</option>
+            <option>Cash</option>
+            <option>Bank</option>
+            <option>Mobile Money</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <!-- Start Date -->
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">From Date</label>
+          <input id="filter-start" type="date"
+            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+        </div>
+        <!-- End Date + Clear -->
+        <div class="flex gap-2 items-end">
+          <div class="flex-1">
+            <label class="block text-xs font-medium text-slate-600 mb-1">To Date</label>
+            <input id="filter-end" type="date"
+              class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+          </div>
+          <button id="btn-clear-filters" title="Clear filters"
+            class="mb-0.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TABLE ──────────────────────────────────────────────────── -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">#</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Category</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Description</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Amount</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Payment</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Date</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Recorded By</th>
+              <th class="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="expense-tbody" class="divide-y divide-slate-100">
+            <!-- rows injected here -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty state -->
+      <div id="empty-state" class="hidden flex-col items-center justify-center py-16 text-slate-400">
+        <i class="fa-solid fa-receipt text-5xl mb-3"></i>
+        <p class="text-lg font-medium">No expenses found</p>
+        <p class="text-sm">Try adjusting your filters or add a new expense.</p>
+      </div>
+
+      <!-- Loading state -->
+      <div id="loading-state" class="flex flex-col items-center justify-center py-16 text-slate-400">
+        <i class="fa-solid fa-spinner fa-spin text-4xl mb-3 text-blue-500"></i>
+        <p class="text-sm">Loading expenses…</p>
+      </div>
+
+      <!-- ── PAGINATION ─────────────────────────────────────────── -->
+      <div id="pagination-wrap" class="hidden flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
+        <p id="pagination-info" class="text-xs text-slate-500"></p>
+        <div class="flex items-center gap-1">
+          <button id="btn-prev"
+            class="px-3 py-1.5 text-xs rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition">
+            <i class="fa-solid fa-chevron-left mr-1"></i>Prev
+          </button>
+          <div id="page-numbers" class="flex gap-1"></div>
+          <button id="btn-next"
+            class="px-3 py-1.5 text-xs rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition">
+            Next<i class="fa-solid fa-chevron-right ml-1"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /p-6 -->
+</div><!-- /#app-layout -->
+
+<!-- ══════════════════════════════════════════════════════════════════
+     ADD / EDIT MODAL
+══════════════════════════════════════════════════════════════════════ -->
+<div id="expense-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+      <h2 id="modal-title" class="text-lg font-bold text-slate-800">Add Expense</h2>
+      <button id="btn-modal-close" class="text-slate-400 hover:text-slate-700 transition text-xl leading-none">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <form id="expense-form" class="px-6 py-5 space-y-4">
+      <input type="hidden" id="expense-id"/>
+
+      <!-- Category -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          Category <span class="text-red-500">*</span>
+        </label>
+        <select id="form-category" required
+          class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">Select category…</option>
+          <option>Rent</option>
+          <option>Utilities</option>
+          <option>Salaries</option>
+          <option>Transport</option>
+          <option>Marketing</option>
+          <option>Office Supplies</option>
+          <option>Maintenance</option>
+          <option>Other</option>
+        </select>
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          Description <span class="text-red-500">*</span>
+        </label>
+        <input id="form-description" type="text" required placeholder="Brief description of the expense"
+          class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+
+      <!-- Amount + Payment Method (side by side) -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            Amount ($) <span class="text-red-500">*</span>
+          </label>
+          <input id="form-amount" type="number" min="0" step="0.01" required placeholder="0.00"
+            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            Payment Method <span class="text-red-500">*</span>
+          </label>
+          <select id="form-payment" required
+            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Select…</option>
+            <option>Cash</option>
+            <option>Bank</option>
+            <option>Mobile Money</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Expense Date -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          Expense Date <span class="text-red-500">*</span>
+        </label>
+        <input id="form-date" type="date" required
+          class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+
+      <!-- Notes -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+        <textarea id="form-notes" rows="3" placeholder="Optional additional notes…"
+          class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+      </div>
+
+      <!-- Form footer -->
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" id="btn-form-cancel"
+          class="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition">
+          Cancel
+        </button>
+        <button type="submit" id="btn-form-submit"
+          class="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow transition">
+          <i id="submit-icon" class="fa-solid fa-floppy-disk"></i>
+          <span id="submit-label">Save Expense</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     DELETE CONFIRM MODAL
+══════════════════════════════════════════════════════════════════════ -->
+<div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+    <div class="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+      <i class="fa-solid fa-trash text-red-600 text-xl"></i>
+    </div>
+    <h3 class="text-lg font-bold text-slate-800 mb-1">Delete Expense?</h3>
+    <p id="delete-desc" class="text-sm text-slate-500 mb-5">This action cannot be undone.</p>
+    <div class="flex gap-3 justify-center">
+      <button id="btn-delete-cancel"
+        class="px-5 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition">
+        Cancel
+      </button>
+      <button id="btn-delete-confirm"
+        class="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow transition">
+        <i class="fa-solid fa-trash"></i> Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCRIPTS ═══════════════════════════════════════════════════════ -->
+<script src="/js/api.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>Layout.init('expenses');</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+  // ─── STATE ─────────────────────────────────────────────────────────
+  let currentPage   = 1;
+  const PAGE_LIMIT  = 20;
+  let totalPages    = 1;
+  let deleteTargetId = null;
+  let searchTimer   = null;
+
+  // ─── CATEGORY CONFIG ───────────────────────────────────────────────
+  const CATEGORY_CONFIG = {
+    'Rent':           { color: 'bg-purple-100 text-purple-700',  icon: 'fa-solid fa-building' },
+    'Utilities':      { color: 'bg-yellow-100 text-yellow-700',  icon: 'fa-solid fa-bolt' },
+    'Salaries':       { color: 'bg-green-100 text-green-700',    icon: 'fa-solid fa-users' },
+    'Transport':      { color: 'bg-sky-100 text-sky-700',        icon: 'fa-solid fa-truck' },
+    'Marketing':      { color: 'bg-pink-100 text-pink-700',      icon: 'fa-solid fa-bullhorn' },
+    'Office Supplies':{ color: 'bg-orange-100 text-orange-700',  icon: 'fa-solid fa-paperclip' },
+    'Maintenance':    { color: 'bg-teal-100 text-teal-700',      icon: 'fa-solid fa-wrench' },
+    'Other':          { color: 'bg-slate-100 text-slate-600',    icon: 'fa-solid fa-tag' },
+  };
+
+  const PAYMENT_CONFIG = {
+    'Cash':         'bg-green-100 text-green-700',
+    'Bank':         'bg-blue-100 text-blue-700',
+    'Mobile Money': 'bg-violet-100 text-violet-700',
+    'Other':        'bg-slate-100 text-slate-600',
+  };
+
+  // ─── ELEMENT REFS ──────────────────────────────────────────────────
+  const tbody         = document.getElementById('expense-tbody');
+  const emptyState    = document.getElementById('empty-state');
+  const loadingState  = document.getElementById('loading-state');
+  const paginationWrap= document.getElementById('pagination-wrap');
+  const paginationInfo= document.getElementById('pagination-info');
+  const pageNumbers   = document.getElementById('page-numbers');
+  const btnPrev       = document.getElementById('btn-prev');
+  const btnNext       = document.getElementById('btn-next');
+  const summaryTotal  = document.getElementById('summary-total');
+  const summaryCount  = document.getElementById('summary-count');
+  const summaryFilter = document.getElementById('summary-filters');
+
+  // Filters
+  const fSearch   = document.getElementById('filter-search');
+  const fCategory = document.getElementById('filter-category');
+  const fPayment  = document.getElementById('filter-payment');
+  const fStart    = document.getElementById('filter-start');
+  const fEnd      = document.getElementById('filter-end');
+
+  // Modal
+  const expenseModal  = document.getElementById('expense-modal');
+  const deleteModal   = document.getElementById('delete-modal');
+  const expenseForm   = document.getElementById('expense-form');
+  const modalTitle    = document.getElementById('modal-title');
+  const submitIcon    = document.getElementById('submit-icon');
+  const submitLabel   = document.getElementById('submit-label');
+  const formId        = document.getElementById('expense-id');
+  const formCategory  = document.getElementById('form-category');
+  const formDesc      = document.getElementById('form-description');
+  const formAmount    = document.getElementById('form-amount');
+  const formPayment   = document.getElementById('form-payment');
+  const formDate      = document.getElementById('form-date');
+  const formNotes     = document.getElementById('form-notes');
+  const deleteDesc    = document.getElementById('delete-desc');
+
+  // ─── HELPERS ──────────────────────────────────────────────────────
+  const fmt = (n) => '$' + parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    const dt = new Date(d);
+    return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
+  };
+
+  const todayISO = () => new Date().toISOString().split('T')[0];
+
+  const showLoading = () => {
+    loadingState.classList.remove('hidden');
+    loadingState.classList.add('flex');
+    emptyState.classList.add('hidden');
+    tbody.innerHTML = '';
+    paginationWrap.classList.add('hidden');
+  };
+
+  const hideLoading = () => {
+    loadingState.classList.add('hidden');
+    loadingState.classList.remove('flex');
+  };
+
+  const categoryBadge = (cat) => {
+    const cfg = CATEGORY_CONFIG[cat] || CATEGORY_CONFIG['Other'];
+    return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}">
+              <i class="${cfg.icon} text-[10px]"></i>${cat || 'Other'}
+            </span>`;
+  };
+
+  const paymentBadge = (pm) => {
+    const cls = PAYMENT_CONFIG[pm] || PAYMENT_CONFIG['Other'];
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${pm || '—'}</span>`;
+  };
+
+  const activeFiltersText = () => {
+    const parts = [];
+    if (fSearch.value.trim())   parts.push('Search');
+    if (fCategory.value)        parts.push('Category');
+    if (fPayment.value)         parts.push('Payment');
+    if (fStart.value || fEnd.value) parts.push('Date');
+    return parts.length ? parts.join(', ') : 'None';
+  };
+
+  // ─── LOAD EXPENSES ────────────────────────────────────────────────
+  const loadExpenses = async (page = 1) => {
+    currentPage = page;
+    showLoading();
+
+    const params = new URLSearchParams({
+      page,
+      limit: PAGE_LIMIT,
+    });
+    if (fSearch.value.trim())   params.set('search', fSearch.value.trim());
+    if (fCategory.value)        params.set('category', fCategory.value);
+    if (fPayment.value)         params.set('payment_method', fPayment.value);
+    if (fStart.value)           params.set('start_date', fStart.value);
+    if (fEnd.value)             params.set('end_date', fEnd.value);
+
+    try {
+      const res  = await API.get(`/expenses?${params.toString()}`);
+      const data = res.data || res;
+      hideLoading();
+
+      const expenses   = data.expenses || [];
+      const pagination = data.pagination || {};
+      const totalAmt   = data.total_amount || 0;
+
+      // Summary cards
+      summaryTotal.textContent  = fmt(totalAmt);
+      summaryCount.textContent  = pagination.total_records ?? expenses.length;
+      summaryFilter.textContent = activeFiltersText();
+
+      // Table
+      if (expenses.length === 0) {
+        emptyState.classList.remove('hidden');
+        emptyState.classList.add('flex');
+        paginationWrap.classList.add('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      emptyState.classList.remove('flex');
+
+      tbody.innerHTML = expenses.map((exp, idx) => {
+        const rowNum = ((page - 1) * PAGE_LIMIT) + idx + 1;
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="px-4 py-3 text-slate-400 font-mono text-xs">${rowNum}</td>
+            <td class="px-4 py-3">${categoryBadge(exp.category)}</td>
+            <td class="px-4 py-3 text-slate-700 max-w-xs">
+              <div class="font-medium truncate">${exp.description || '—'}</div>
+              ${exp.notes ? `<div class="text-xs text-slate-400 truncate mt-0.5">${exp.notes}</div>` : ''}
+            </td>
+            <td class="px-4 py-3 text-right font-semibold text-slate-800">${fmt(exp.amount)}</td>
+            <td class="px-4 py-3">${paymentBadge(exp.payment_method)}</td>
+            <td class="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">${fmtDate(exp.expense_date)}</td>
+            <td class="px-4 py-3 text-slate-500 text-xs">${exp.created_by_name || '—'}</td>
+            <td class="px-4 py-3">
+              <div class="flex items-center justify-center gap-2">
+                <button data-id="${exp.id}" class="btn-edit text-blue-600 hover:text-blue-800 text-sm transition" title="Edit"
+                  data-expense='${JSON.stringify(exp).replace(/'/g, "&apos;")}'>
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button data-id="${exp.id}" data-desc="${(exp.description || '').replace(/"/g, '&quot;')}"
+                  class="btn-delete text-red-500 hover:text-red-700 text-sm transition" title="Delete">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
+
+      // Pagination
+      totalPages = pagination.total_pages || 1;
+      renderPagination(pagination);
+
+    } catch (err) {
+      hideLoading();
+      console.error(err);
+      Toast.error('Failed to load expenses. Please try again.');
+    }
+  };
+
+  // ─── PAGINATION ───────────────────────────────────────────────────
+  const renderPagination = (pagination) => {
+    const total   = pagination.total_records || 0;
+    const current = pagination.current_page  || currentPage;
+    const pages   = pagination.total_pages   || 1;
+    const from    = total === 0 ? 0 : (current - 1) * PAGE_LIMIT + 1;
+    const to      = Math.min(current * PAGE_LIMIT, total);
+
+    if (total === 0) { paginationWrap.classList.add('hidden'); return; }
+    paginationWrap.classList.remove('hidden');
+
+    paginationInfo.textContent = `Showing ${from}–${to} of ${total} record${total !== 1 ? 's' : ''}`;
+    btnPrev.disabled = current <= 1;
+    btnNext.disabled = current >= pages;
+
+    // Page number buttons (show up to 5)
+    pageNumbers.innerHTML = '';
+    const start = Math.max(1, current - 2);
+    const end   = Math.min(pages, start + 4);
+    for (let i = start; i <= end; i++) {
+      const btn = document.createElement('button');
+      btn.textContent = i;
+      btn.className = `px-2.5 py-1.5 text-xs rounded-md border transition ${
+        i === current
+          ? 'bg-blue-600 border-blue-600 text-white font-semibold'
+          : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-700'
+      }`;
+      btn.addEventListener('click', () => loadExpenses(i));
+      pageNumbers.appendChild(btn);
+    }
+  };
+
+  btnPrev.addEventListener('click', () => { if (currentPage > 1) loadExpenses(currentPage - 1); });
+  btnNext.addEventListener('click', () => { if (currentPage < totalPages) loadExpenses(currentPage + 1); });
+
+  // ─── FILTER EVENTS ────────────────────────────────────────────────
+  const triggerSearch = () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadExpenses(1), 400);
+  };
+
+  fSearch.addEventListener('input', triggerSearch);
+  fCategory.addEventListener('change', () => loadExpenses(1));
+  fPayment.addEventListener('change', () => loadExpenses(1));
+  fStart.addEventListener('change', () => loadExpenses(1));
+  fEnd.addEventListener('change', () => loadExpenses(1));
+
+  document.getElementById('btn-clear-filters').addEventListener('click', () => {
+    fSearch.value   = '';
+    fCategory.value = '';
+    fPayment.value  = '';
+    fStart.value    = '';
+    fEnd.value      = '';
+    loadExpenses(1);
+  });
+
+  // ─── OPEN ADD MODAL ───────────────────────────────────────────────
+  document.getElementById('btn-add-expense').addEventListener('click', () => {
+    formId.value        = '';
+    expenseForm.reset();
+    formDate.value      = todayISO();
+    modalTitle.textContent  = 'Add Expense';
+    submitLabel.textContent = 'Save Expense';
+    submitIcon.className    = 'fa-solid fa-floppy-disk';
+    openModal(expenseModal);
+  });
+
+  // ─── OPEN EDIT MODAL ─────────────────────────────────────────────
+  tbody.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('.btn-edit');
+    const delBtn  = e.target.closest('.btn-delete');
+
+    if (editBtn) {
+      const exp = JSON.parse(editBtn.getAttribute('data-expense').replace(/&apos;/g, "'"));
+      formId.value        = exp.id;
+      formCategory.value  = exp.category  || '';
+      formDesc.value      = exp.description || '';
+      formAmount.value    = exp.amount     || '';
+      formPayment.value   = exp.payment_method || '';
+      formDate.value      = exp.expense_date ? exp.expense_date.split('T')[0] : todayISO();
+      formNotes.value     = exp.notes      || '';
+      modalTitle.textContent  = 'Edit Expense';
+      submitLabel.textContent = 'Update Expense';
+      submitIcon.className    = 'fa-solid fa-pen-to-square';
+      openModal(expenseModal);
+    }
+
+    if (delBtn) {
+      deleteTargetId = delBtn.getAttribute('data-id');
+      const desc = delBtn.getAttribute('data-desc') || 'this expense';
+      deleteDesc.textContent = `Are you sure you want to delete "${desc}"? This action cannot be undone.`;
+      openModal(deleteModal);
+    }
+  });
+
+  // ─── FORM SUBMIT ─────────────────────────────────────────────────
+  expenseForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = formId.value;
+    const payload = {
+      category:       formCategory.value,
+      description:    formDesc.value.trim(),
+      amount:         parseFloat(formAmount.value),
+      payment_method: formPayment.value,
+      expense_date:   formDate.value,
+      notes:          formNotes.value.trim(),
+    };
+
+    const btn = document.getElementById('btn-form-submit');
+    btn.disabled = true;
+    submitIcon.className = 'fa-solid fa-spinner fa-spin';
+    submitLabel.textContent = id ? 'Updating…' : 'Saving…';
+
+    try {
+      if (id) {
+        await API.put(`/expenses/${id}`, payload);
+        Toast.success('Expense updated successfully!');
+      } else {
+        await API.post('/expenses', payload);
+        Toast.success('Expense added successfully!');
+      }
+      closeModal(expenseModal);
+      loadExpenses(id ? currentPage : 1);
+    } catch (err) {
+      console.error(err);
+      Toast.error(err?.message || 'Failed to save expense. Please try again.');
+    } finally {
+      btn.disabled = false;
+      submitIcon.className    = id ? 'fa-solid fa-pen-to-square' : 'fa-solid fa-floppy-disk';
+      submitLabel.textContent = id ? 'Update Expense' : 'Save Expense';
+    }
+  });
+
+  // ─── DELETE CONFIRM ──────────────────────────────────────────────
+  document.getElementById('btn-delete-confirm').addEventListener('click', async () => {
+    if (!deleteTargetId) return;
+    const btn = document.getElementById('btn-delete-confirm');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Deleting…';
+    try {
+      await API.delete(`/expenses/${deleteTargetId}`);
+      Toast.success('Expense deleted successfully!');
+      closeModal(deleteModal);
+      loadExpenses(currentPage);
+    } catch (err) {
+      console.error(err);
+      Toast.error(err?.message || 'Failed to delete expense.');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-trash mr-1"></i>Delete';
+      deleteTargetId = null;
+    }
+  });
+
+  // ─── MODAL HELPERS ───────────────────────────────────────────────
+  const openModal  = (m) => m.classList.remove('hidden');
+  const closeModal = (m) => m.classList.add('hidden');
+
+  document.getElementById('btn-modal-close').addEventListener('click',  () => closeModal(expenseModal));
+  document.getElementById('btn-form-cancel').addEventListener('click',  () => closeModal(expenseModal));
+  document.getElementById('btn-delete-cancel').addEventListener('click',() => closeModal(deleteModal));
+
+  // Close modals on backdrop click
+  expenseModal.addEventListener('click', (e) => { if (e.target === expenseModal) closeModal(expenseModal); });
+  deleteModal.addEventListener('click',  (e) => { if (e.target === deleteModal)  closeModal(deleteModal); });
+
+  // ─── INIT ────────────────────────────────────────────────────────
+  loadExpenses(1);
+});
+</script>
+</body>
+</html>

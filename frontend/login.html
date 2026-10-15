@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login - Apex Inventory Management</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-950 flex items-center justify-center min-h-screen p-4 antialiased selection:bg-blue-500 selection:text-white">
+  
+  <div class="w-full max-w-md">
+    <!-- Card Container -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden p-8">
+      
+      <!-- Logo & Header -->
+      <div class="text-center mb-8">
+        <div class="w-14 h-14 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-blue-500/20">
+          <i class="fa-solid fa-cubes text-2xl"></i>
+        </div>
+        <h1 class="text-2xl font-extrabold text-white tracking-tight">Apex Inventory</h1>
+        <p class="text-xs text-blue-400 font-semibold tracking-wider uppercase mt-1">Single-Business Enterprise Edition</p>
+        <p class="text-sm text-slate-400 mt-2">Sign in to access your organization's inventory portal</p>
+      </div>
+
+      <!-- Login Form -->
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Work Email</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
+              <i class="fa-solid fa-envelope"></i>
+            </span>
+            <input 
+              type="email" 
+              id="email" 
+              required 
+              placeholder="admin@apexinventory.com" 
+              class="w-full pl-10 pr-4 py-3 bg-slate-800/80 border border-slate-700/80 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition placeholder:text-slate-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Password</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
+              <i class="fa-solid fa-lock"></i>
+            </span>
+            <input 
+              type="password" 
+              id="password" 
+              required 
+              placeholder="••••••••" 
+              class="w-full pl-10 pr-10 py-3 bg-slate-800/80 border border-slate-700/80 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition placeholder:text-slate-500"
+            />
+            <button type="button" id="toggle-pwd-btn" class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-white">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <button 
+          type="submit" 
+          id="submit-btn" 
+          class="w-full mt-2 py-3.5 px-4 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-blue-600/30 transition transform active:scale-[0.99] flex items-center justify-center space-x-2"
+        >
+          <span>Sign In to System</span>
+          <i class="fa-solid fa-arrow-right text-xs"></i>
+        </button>
+      </form>
+
+    </div>
+
+    <!-- Security footnote -->
+    <div class="text-center mt-6 text-xs text-slate-500">
+      <i class="fa-solid fa-shield-halved mr-1 text-slate-400"></i>
+      Protected by JWT & Bcrypt Authentication. Single-Business Instance.
+    </div>
+  </div>
+
+  <!-- Shared JavaScript modules -->
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+    // Redirect if already authenticated
+    if (Auth.isAuthenticated()) {
+      window.location.replace('/dashboard.html');
+    }
+
+    // Toggle password visibility
+    const pwdInput = document.getElementById('password');
+    const toggleBtn = document.getElementById('toggle-pwd-btn');
+    toggleBtn.addEventListener('click', () => {
+      if (pwdInput.type === 'password') {
+        pwdInput.type = 'text';
+        toggleBtn.innerHTML = '<i class="fa-solid fa-eye-slash"></i>';
+      } else {
+        pwdInput.type = 'password';
+        toggleBtn.innerHTML = '<i class="fa-solid fa-eye"></i>';
+      }
+    });
+
+    // Login Submission
+    const form = document.getElementById('login-form');
+    const submitBtn = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Authenticating...';
+
+      try {
+        const res = await API.post('/auth/login', { email, password });
+        Auth.setUser(res.data.user, res.data.token);
+        Toast.success(`Welcome back, ${res.data.user.name}!`);
+        setTimeout(() => {
+          window.location.replace('/dashboard.html');
+        }, 600);
+      } catch (err) {
+        Toast.error(err.message || 'Login failed');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>Sign In to System</span><i class="fa-solid fa-arrow-right text-xs ml-2"></i>';
+      }
+    });
+  </script>
+</body>
+</html>

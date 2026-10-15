@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoices - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+  <style>
+    /* ── Print styles: only show the A4 invoice area ── */
+    @media print {
+      body * { visibility: hidden !important; }
+      #printable-invoice, #printable-invoice * { visibility: visible !important; }
+      #printable-invoice {
+        position: fixed;
+        inset: 0;
+        padding: 32px 40px;
+        background: #fff !important;
+        color: #0f172a !important;
+        font-size: 11pt;
+        overflow: visible !important;
+      }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50">
+<div id="app-layout">
+
+  <!-- ── PAGE HEADER ── -->
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-black text-slate-900 flex items-center gap-2">
+        <i class="fa-solid fa-file-invoice-dollar text-blue-600 text-xl"></i>
+        Invoices
+      </h1>
+      <p class="text-xs text-slate-500 mt-1">Search, review, and print invoices generated from sales transactions.</p>
+    </div>
+  </div>
+
+  <!-- ── STAT CARDS ── -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+        <i class="fa-solid fa-file-invoice text-blue-600 text-sm"></i>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-500 uppercase font-semibold tracking-wide">Total Invoices</p>
+        <p id="stat-total" class="text-xl font-black text-slate-900">—</p>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+        <i class="fa-solid fa-circle-check text-emerald-600 text-sm"></i>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-500 uppercase font-semibold tracking-wide">Paid</p>
+        <p id="stat-paid" class="text-xl font-black text-emerald-600">—</p>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+        <i class="fa-solid fa-clock text-amber-500 text-sm"></i>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-500 uppercase font-semibold tracking-wide">Partially Paid</p>
+        <p id="stat-partial" class="text-xl font-black text-amber-500">—</p>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center shrink-0">
+        <i class="fa-solid fa-circle-xmark text-rose-500 text-sm"></i>
+      </div>
+      <div>
+        <p class="text-[11px] text-slate-500 uppercase font-semibold tracking-wide">Unpaid</p>
+        <p id="stat-unpaid" class="text-xl font-black text-rose-500">—</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FILTER BAR ── -->
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <!-- Search -->
+      <div class="relative lg:col-span-2">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 pointer-events-none">
+          <i class="fa-solid fa-magnifying-glass text-xs"></i>
+        </span>
+        <input
+          id="search-input"
+          type="text"
+          placeholder="Invoice number or customer name…"
+          class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+        />
+      </div>
+      <!-- Status Filter -->
+      <select id="status-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium">
+        <option value="">All Statuses</option>
+        <option value="Paid">Paid</option>
+        <option value="Partially Paid">Partially Paid</option>
+        <option value="Unpaid">Unpaid</option>
+        <option value="Cancelled">Cancelled</option>
+      </select>
+      <!-- Date Range -->
+      <input id="start-date" type="date" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+      <input id="end-date" type="date" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+    </div>
+    <div class="mt-3 flex gap-2">
+      <button id="apply-filters-btn" class="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm flex items-center gap-2 transition">
+        <i class="fa-solid fa-filter"></i> Apply Filters
+      </button>
+      <button id="clear-filters-btn" class="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition">
+        <i class="fa-solid fa-xmark mr-1"></i> Clear
+      </button>
+    </div>
+  </div>
+
+  <!-- ── INVOICES TABLE ── -->
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-50 border-b border-slate-200">
+          <tr class="text-slate-500 uppercase tracking-wide">
+            <th class="px-4 py-3 font-semibold">Invoice #</th>
+            <th class="px-4 py-3 font-semibold">Customer</th>
+            <th class="px-4 py-3 font-semibold">Date</th>
+            <th class="px-4 py-3 font-semibold text-right">Subtotal</th>
+            <th class="px-4 py-3 font-semibold text-right">Discount</th>
+            <th class="px-4 py-3 font-semibold text-right">Tax</th>
+            <th class="px-4 py-3 font-semibold text-right">Total</th>
+            <th class="px-4 py-3 font-semibold text-right">Paid</th>
+            <th class="px-4 py-3 font-semibold text-right">Remaining</th>
+            <th class="px-4 py-3 font-semibold">Status</th>
+            <th class="px-4 py-3 font-semibold">Payment</th>
+            <th class="px-4 py-3 font-semibold text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="invoice-tbody" class="divide-y divide-slate-100">
+          <tr>
+            <td colspan="12" class="px-4 py-12 text-center text-slate-400">
+              <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading invoices…
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+      <span id="page-info" class="text-slate-500"></span>
+      <div class="flex items-center gap-2">
+        <button id="prev-btn" class="px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition" disabled>
+          <i class="fa-solid fa-chevron-left mr-1"></i> Prev
+        </button>
+        <span id="page-label" class="font-bold text-slate-700 min-w-[4rem] text-center"></span>
+        <button id="next-btn" class="px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition" disabled>
+          Next <i class="fa-solid fa-chevron-right ml-1"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end #app-layout -->
+
+
+<!-- ══════════════════════════════════════
+     INVOICE VIEW MODAL (A4 printable)
+══════════════════════════════════════ -->
+<div id="invoice-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+  <div class="bg-white rounded-2xl w-full max-w-3xl shadow-2xl border border-slate-100 my-8">
+
+    <!-- Modal Top Bar (no-print) -->
+    <div class="no-print flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h2 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+        <i class="fa-solid fa-file-invoice-dollar text-blue-600"></i>
+        Invoice Preview
+      </h2>
+      <div class="flex items-center gap-2">
+        <button id="print-invoice-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-2 transition">
+          <i class="fa-solid fa-print"></i> Print Invoice
+        </button>
+        <button id="close-modal-btn" class="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── PRINTABLE A4 CONTENT ── -->
+    <div id="printable-invoice" class="p-8 text-slate-800 text-sm">
+
+      <!-- Business Header -->
+      <div class="flex items-start justify-between border-b-2 border-slate-200 pb-6 mb-6">
+        <div class="flex items-center gap-4">
+          <!-- Logo Placeholder -->
+          <div class="w-14 h-14 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
+            <i class="fa-solid fa-box text-white text-2xl"></i>
+          </div>
+          <div>
+            <h1 id="inv-biz-name" class="text-xl font-black text-slate-900 uppercase tracking-wide"></h1>
+            <p id="inv-biz-address" class="text-xs text-slate-500 mt-0.5"></p>
+            <div class="flex gap-4 mt-1 text-xs text-slate-500">
+              <span id="inv-biz-phone" class="flex items-center gap-1"><i class="fa-solid fa-phone text-[10px]"></i> <span></span></span>
+              <span id="inv-biz-email" class="flex items-center gap-1"><i class="fa-solid fa-envelope text-[10px]"></i> <span></span></span>
+            </div>
+          </div>
+        </div>
+        <!-- Invoice Label Block -->
+        <div class="text-right shrink-0">
+          <div class="inline-block px-4 py-2 bg-blue-600 text-white text-xl font-black rounded-xl tracking-widest mb-2">INVOICE</div>
+          <div id="inv-number" class="font-mono font-bold text-slate-900 text-sm"></div>
+          <div id="inv-date" class="text-xs text-slate-500 mt-0.5"></div>
+          <div id="inv-status-badge" class="mt-2 inline-block px-3 py-1 rounded-full text-xs font-bold"></div>
+        </div>
+      </div>
+
+      <!-- Bill To -->
+      <div class="grid grid-cols-2 gap-6 mb-7">
+        <div>
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Bill To</p>
+          <p id="inv-cust-name" class="font-bold text-slate-900 text-base"></p>
+          <p id="inv-cust-phone" class="text-xs text-slate-500 mt-0.5"></p>
+          <p id="inv-cust-email" class="text-xs text-slate-500"></p>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Payment Method</p>
+          <p id="inv-payment-method" class="font-bold text-slate-700 text-sm"></p>
+        </div>
+      </div>
+
+      <!-- Items Table -->
+      <div class="overflow-x-auto mb-6">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="bg-slate-800 text-white">
+              <th class="px-3 py-2.5 text-left font-semibold rounded-l-lg">#</th>
+              <th class="px-3 py-2.5 text-left font-semibold">Product</th>
+              <th class="px-3 py-2.5 text-left font-semibold">SKU</th>
+              <th class="px-3 py-2.5 text-center font-semibold">Qty</th>
+              <th class="px-3 py-2.5 text-right font-semibold">Unit Price</th>
+              <th class="px-3 py-2.5 text-right font-semibold">Discount</th>
+              <th class="px-3 py-2.5 text-right font-semibold rounded-r-lg">Total</th>
+            </tr>
+          </thead>
+          <tbody id="inv-items-tbody" class="divide-y divide-slate-100">
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Totals + Footer Row -->
+      <div class="flex flex-col sm:flex-row justify-end gap-6">
+        <!-- Spacer -->
+        <div class="flex-1"></div>
+
+        <!-- Totals Block -->
+        <div class="w-full sm:w-72 space-y-2 text-xs">
+          <div class="flex justify-between text-slate-600">
+            <span>Subtotal</span>
+            <span id="inv-subtotal" class="font-semibold text-slate-800"></span>
+          </div>
+          <div class="flex justify-between text-slate-600">
+            <span>Discount</span>
+            <span id="inv-discount" class="font-semibold text-rose-500"></span>
+          </div>
+          <div class="flex justify-between text-slate-600">
+            <span>Tax</span>
+            <span id="inv-tax" class="font-semibold text-slate-800"></span>
+          </div>
+          <div class="flex justify-between items-center border-t-2 border-slate-800 pt-2 mt-1">
+            <span class="text-sm font-black text-slate-900 uppercase tracking-wide">Total Amount</span>
+            <span id="inv-total" class="text-base font-black text-slate-900"></span>
+          </div>
+          <div class="flex justify-between text-slate-600 border-t border-slate-200 pt-2">
+            <span class="font-semibold text-emerald-700">Amount Paid</span>
+            <span id="inv-paid" class="font-bold text-emerald-700"></span>
+          </div>
+          <div id="inv-remaining-row" class="flex justify-between">
+            <span class="font-semibold text-rose-600">Remaining Balance</span>
+            <span id="inv-remaining" class="font-bold text-rose-600"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer / Thank You -->
+      <div class="mt-10 pt-6 border-t border-dashed border-slate-300 text-center text-xs text-slate-400">
+        <p id="inv-footer-text" class="mb-1 font-medium text-slate-500 italic"></p>
+        <p class="text-slate-400">Thank you for your business!</p>
+      </div>
+
+    </div><!-- end #printable-invoice -->
+  </div>
+</div>
+<!-- END INVOICE MODAL -->
+
+
+<script src="/js/api.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+  Layout.init('invoices');
+
+  // ── State ──────────────────────────────────────────────────────────────
+  let currentPage = 1;
+  const PAGE_LIMIT = 20;
+  let totalPages  = 1;
+
+  // ── Helpers ────────────────────────────────────────────────────────────
+  function fmt(val) {
+    const n = parseFloat(val) || 0;
+    return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function fmtDate(str) {
+    if (!str) return '—';
+    const d = new Date(str);
+    if (isNaN(d)) return str;
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+  }
+
+  function statusBadge(status) {
+    const map = {
+      'Paid':          'bg-emerald-100 text-emerald-700',
+      'Partially Paid':'bg-amber-100 text-amber-700',
+      'Unpaid':        'bg-rose-100 text-rose-700',
+      'Cancelled':     'bg-slate-100 text-slate-500'
+    };
+    const cls = map[status] || 'bg-slate-100 text-slate-500';
+    return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${cls}">${esc(status)}</span>`;
+  }
+
+  function modalStatusClass(status) {
+    const map = {
+      'Paid':          'bg-emerald-100 text-emerald-700',
+      'Partially Paid':'bg-amber-100 text-amber-700',
+      'Unpaid':        'bg-rose-100 text-rose-700',
+      'Cancelled':     'bg-slate-100 text-slate-500'
+    };
+    return map[status] || 'bg-slate-100 text-slate-500';
+  }
+
+  // ── Collect filter values ───────────────────────────────────────────────
+  function getFilters() {
+    return {
+      search:     document.getElementById('search-input').value.trim(),
+      status:     document.getElementById('status-filter').value,
+      start_date: document.getElementById('start-date').value,
+      end_date:   document.getElementById('end-date').value,
+      page:       currentPage,
+      limit:      PAGE_LIMIT
+    };
+  }
+
+  // ── Load & render invoice list ──────────────────────────────────────────
+  async function loadInvoices(page = 1) {
+    currentPage = page;
+    const tbody = document.getElementById('invoice-tbody');
+    tbody.innerHTML = `<tr><td colspan="12" class="px-4 py-12 text-center text-slate-400">
+      <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading invoices…
+    </td></tr>`;
+
+    try {
+      const res = await API.get('/invoices', getFilters());
+      const { invoices = [], pagination = {} } = res.data;
+
+      totalPages = Math.max(1, parseInt(pagination.total_pages) || 1);
+      const total = parseInt(pagination.total) || 0;
+
+      // Update stat cards from current page data
+      updateStats(invoices);
+
+      // Pagination info
+      document.getElementById('page-info').textContent =
+        `Showing ${invoices.length} of ${total} invoice${total !== 1 ? 's' : ''}`;
+      document.getElementById('page-label').textContent = `${currentPage} / ${totalPages}`;
+      document.getElementById('prev-btn').disabled = currentPage <= 1;
+      document.getElementById('next-btn').disabled = currentPage >= totalPages;
+
+      if (!invoices.length) {
+        tbody.innerHTML = `<tr><td colspan="12" class="px-4 py-12 text-center text-slate-400">
+          <i class="fa-solid fa-file-invoice text-3xl mb-3 block text-slate-300"></i>
+          No invoices found matching your filters.
+        </td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = invoices.map(inv => `
+        <tr class="hover:bg-slate-50/60 transition">
+          <td class="px-4 py-3 font-mono font-bold text-blue-700 whitespace-nowrap">
+            ${esc(inv.invoice_number)}
+          </td>
+          <td class="px-4 py-3">
+            <div class="font-semibold text-slate-800">${esc(inv.customer_name || 'Walk-in Customer')}</div>
+            ${inv.customer_phone ? `<div class="text-[10px] text-slate-400">${esc(inv.customer_phone)}</div>` : ''}
+          </td>
+          <td class="px-4 py-3 text-slate-600 whitespace-nowrap">${fmtDate(inv.invoice_date)}</td>
+          <td class="px-4 py-3 text-right text-slate-700">${fmt(inv.subtotal)}</td>
+          <td class="px-4 py-3 text-right text-rose-500">${fmt(inv.discount)}</td>
+          <td class="px-4 py-3 text-right text-slate-600">${fmt(inv.tax)}</td>
+          <td class="px-4 py-3 text-right font-bold text-slate-900">${fmt(inv.total)}</td>
+          <td class="px-4 py-3 text-right text-emerald-700 font-semibold">${fmt(inv.paid_amount)}</td>
+          <td class="px-4 py-3 text-right font-semibold ${parseFloat(inv.remaining_amount) > 0 ? 'text-rose-600' : 'text-slate-400'}">${fmt(inv.remaining_amount)}</td>
+          <td class="px-4 py-3">${statusBadge(inv.status)}</td>
+          <td class="px-4 py-3 text-slate-600 whitespace-nowrap">
+            <span class="inline-flex items-center gap-1 text-[11px]">
+              <i class="fa-solid ${paymentIcon(inv.payment_method)} text-slate-400"></i>
+              ${esc(inv.payment_method || '—')}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <button
+              data-view-id="${esc(inv.id)}"
+              class="view-invoice-btn inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold transition"
+            >
+              <i class="fa-solid fa-eye"></i> View
+            </button>
+          </td>
+        </tr>
+      `).join('');
+
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="12" class="px-4 py-8 text-center text-rose-500 text-xs">
+        <i class="fa-solid fa-triangle-exclamation mr-2"></i> ${esc(err.message || 'Failed to load invoices.')}
+      </td></tr>`;
+    }
+  }
+
+  // ── Stat card updater (from page data) ─────────────────────────────────
+  function updateStats(invoices) {
+    let paid = 0, partial = 0, unpaid = 0;
+    invoices.forEach(inv => {
+      if (inv.status === 'Paid') paid++;
+      else if (inv.status === 'Partially Paid') partial++;
+      else if (inv.status === 'Unpaid') unpaid++;
+    });
+    document.getElementById('stat-total').textContent   = invoices.length;
+    document.getElementById('stat-paid').textContent    = paid;
+    document.getElementById('stat-partial').textContent = partial;
+    document.getElementById('stat-unpaid').textContent  = unpaid;
+  }
+
+  // ── Payment method icon helper ──────────────────────────────────────────
+  function paymentIcon(method) {
+    const m = (method || '').toLowerCase();
+    if (m.includes('cash'))   return 'fa-money-bill-wave';
+    if (m.includes('bank'))   return 'fa-building-columns';
+    if (m.includes('mobile')) return 'fa-mobile-screen';
+    if (m.includes('credit')) return 'fa-file-invoice-dollar';
+    return 'fa-credit-card';
+  }
+
+  // ── Open Invoice View Modal ────────────────────────────────────────────
+  async function openInvoiceModal(invoiceId) {
+    const modal = document.getElementById('invoice-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    // Show loading state in content area
+    document.getElementById('inv-biz-name').textContent    = 'Loading…';
+    document.getElementById('inv-items-tbody').innerHTML   = `
+      <tr><td colspan="7" class="px-3 py-8 text-center text-slate-400">
+        <i class="fa-solid fa-spinner fa-spin mr-2"></i> Fetching invoice…
+      </td></tr>`;
+
+    try {
+      const res = await API.get(`/invoices/${encodeURIComponent(invoiceId)}`);
+      const inv = res.data;
+      const biz = inv.business || {};
+
+      // ── Business Info ──
+      document.getElementById('inv-biz-name').textContent = biz.business_name || 'Apex Inventory';
+      document.getElementById('inv-biz-address').textContent = biz.address || '';
+      const phoneEl = document.querySelector('#inv-biz-phone span');
+      const emailEl = document.querySelector('#inv-biz-email span');
+      if (phoneEl) phoneEl.textContent = biz.phone || '';
+      if (emailEl) emailEl.textContent = biz.email || '';
+
+      document.getElementById('inv-biz-phone').style.display = biz.phone  ? '' : 'none';
+      document.getElementById('inv-biz-email').style.display = biz.email  ? '' : 'none';
+
+      // ── Invoice Header ──
+      document.getElementById('inv-number').textContent = inv.invoice_number || '';
+      document.getElementById('inv-date').textContent   = fmtDate(inv.invoice_date);
+
+      const badge = document.getElementById('inv-status-badge');
+      badge.textContent = inv.status || '';
+      badge.className   = `mt-2 inline-block px-3 py-1 rounded-full text-xs font-bold ${modalStatusClass(inv.status)}`;
+
+      // ── Bill To ──
+      document.getElementById('inv-cust-name').textContent  = inv.customer_name  || 'Walk-in Customer';
+      document.getElementById('inv-cust-phone').textContent = inv.customer_phone || '';
+      document.getElementById('inv-cust-email').textContent = inv.customer_email || '';
+      document.getElementById('inv-payment-method').textContent = inv.payment_method || '—';
+
+      // ── Items Table ──
+      const items = inv.items || [];
+      document.getElementById('inv-items-tbody').innerHTML = items.length ? items.map((item, i) => `
+        <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}">
+          <td class="px-3 py-2.5 text-slate-400 font-mono">${i + 1}</td>
+          <td class="px-3 py-2.5 font-semibold text-slate-800">${esc(item.product_name)}</td>
+          <td class="px-3 py-2.5 font-mono text-slate-500 text-[10px]">${esc(item.product_sku || '—')}</td>
+          <td class="px-3 py-2.5 text-center text-slate-700">
+            ${esc(item.quantity)} <span class="text-slate-400">${esc(item.product_unit || '')}</span>
+          </td>
+          <td class="px-3 py-2.5 text-right text-slate-700">${fmt(item.unit_price)}</td>
+          <td class="px-3 py-2.5 text-right text-rose-500">${fmt(item.discount)}</td>
+          <td class="px-3 py-2.5 text-right font-bold text-slate-900">${fmt(item.total)}</td>
+        </tr>
+      `).join('') : `<tr><td colspan="7" class="px-3 py-6 text-center text-slate-400">No items on this invoice.</td></tr>`;
+
+      // ── Totals ──
+      document.getElementById('inv-subtotal').textContent = fmt(inv.subtotal);
+      document.getElementById('inv-discount').textContent = fmt(inv.discount);
+      document.getElementById('inv-tax').textContent      = fmt(inv.tax);
+      document.getElementById('inv-total').textContent    = fmt(inv.total);
+      document.getElementById('inv-paid').textContent     = fmt(inv.paid_amount);
+
+      const remaining = parseFloat(inv.remaining_amount) || 0;
+      const remainRow = document.getElementById('inv-remaining-row');
+      if (remaining > 0) {
+        document.getElementById('inv-remaining').textContent = fmt(remaining);
+        remainRow.classList.remove('hidden');
+      } else {
+        remainRow.classList.add('hidden');
+      }
+
+      // ── Footer ──
+      const footerText = document.getElementById('inv-footer-text');
+      footerText.textContent = biz.receipt_footer || '';
+      footerText.style.display = biz.receipt_footer ? '' : 'none';
+
+    } catch (err) {
+      Toast.error('Failed to load invoice: ' + (err.message || 'Unknown error'));
+      document.getElementById('inv-biz-name').textContent = 'Error';
+    }
+  }
+
+  function closeInvoiceModal() {
+    const modal = document.getElementById('invoice-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  // ── Event Wiring (DOMContentLoaded) ────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+
+    // Initial load
+    loadInvoices(1);
+
+    // Filter actions
+    document.getElementById('apply-filters-btn').addEventListener('click', () => loadInvoices(1));
+    document.getElementById('clear-filters-btn').addEventListener('click', () => {
+      document.getElementById('search-input').value = '';
+      document.getElementById('status-filter').value = '';
+      document.getElementById('start-date').value = '';
+      document.getElementById('end-date').value = '';
+      loadInvoices(1);
+    });
+
+    // Search on Enter key
+    document.getElementById('search-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') loadInvoices(1);
+    });
+
+    // Pagination
+    document.getElementById('prev-btn').addEventListener('click', () => {
+      if (currentPage > 1) loadInvoices(currentPage - 1);
+    });
+    document.getElementById('next-btn').addEventListener('click', () => {
+      if (currentPage < totalPages) loadInvoices(currentPage + 1);
+    });
+
+    // Table row clicks — delegated
+    document.getElementById('invoice-tbody').addEventListener('click', e => {
+      const btn = e.target.closest('.view-invoice-btn');
+      if (btn) openInvoiceModal(btn.dataset.viewId);
+    });
+
+    // Modal close button
+    document.getElementById('close-modal-btn').addEventListener('click', closeInvoiceModal);
+
+    // Close on backdrop click
+    document.getElementById('invoice-modal').addEventListener('click', e => {
+      if (e.target === document.getElementById('invoice-modal')) closeInvoiceModal();
+    });
+
+    // Keyboard ESC
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeInvoiceModal();
+    });
+
+    // Print button
+    document.getElementById('print-invoice-btn').addEventListener('click', () => window.print());
+  });
+</script>
+</body>
+</html>

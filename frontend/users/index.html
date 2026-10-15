@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Users & Roles – Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50 text-slate-900">
+<div id="app-layout">
+
+  <!-- Page Content -->
+  <div class="p-6 space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Users &amp; Roles</h1>
+        <p class="text-sm text-slate-500 mt-0.5">Manage system users, roles, and view activity audit logs.</p>
+      </div>
+      <button id="btn-add-user"
+        class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow transition">
+        <i class="fa-solid fa-user-plus"></i> Add User
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="border-b border-slate-200">
+      <nav class="flex gap-1" id="tab-nav">
+        <button data-tab="users"
+          class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-blue-600 text-blue-600 transition">
+          <i class="fa-solid fa-users mr-1.5"></i>System Users
+        </button>
+        <button data-tab="audit"
+          class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition">
+          <i class="fa-solid fa-clipboard-list mr-1.5"></i>Audit Logs
+        </button>
+      </nav>
+    </div>
+
+    <!-- ===== USERS TAB ===== -->
+    <div id="tab-users" class="tab-panel space-y-5">
+
+      <!-- Filters -->
+      <div class="flex flex-col sm:flex-row gap-3">
+        <div class="relative flex-1">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input id="search-input" type="text" placeholder="Search by name or email…"
+            class="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <select id="role-filter"
+          class="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Roles</option>
+          <option value="Admin">Admin</option>
+          <option value="Manager">Manager</option>
+          <option value="Sales">Sales</option>
+          <option value="Inventory">Inventory</option>
+          <option value="Accountant">Accountant</option>
+        </select>
+        <select id="status-filter"
+          class="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      <!-- User Cards Grid -->
+      <div id="users-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Empty State -->
+      <div id="users-empty" class="hidden flex flex-col items-center justify-center py-20 text-slate-400">
+        <i class="fa-solid fa-users text-5xl mb-4 opacity-30"></i>
+        <p class="text-lg font-medium">No users found</p>
+        <p class="text-sm mt-1">Try adjusting your search or filters.</p>
+      </div>
+
+      <!-- Loading -->
+      <div id="users-loading" class="hidden flex justify-center py-16">
+        <div class="flex items-center gap-2 text-slate-400">
+          <i class="fa-solid fa-spinner fa-spin text-xl"></i>
+          <span class="text-sm">Loading users…</span>
+        </div>
+      </div>
+
+    </div><!-- /tab-users -->
+
+    <!-- ===== AUDIT LOGS TAB ===== -->
+    <div id="tab-audit" class="tab-panel hidden space-y-5">
+
+      <!-- Filters -->
+      <div class="flex flex-col sm:flex-row gap-3">
+        <select id="audit-module-filter"
+          class="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Modules</option>
+          <option value="Auth">Auth</option>
+          <option value="Products">Products</option>
+          <option value="Sales">Sales</option>
+          <option value="Purchases">Purchases</option>
+          <option value="Stock">Stock</option>
+          <option value="Users">Users</option>
+          <option value="Settings">Settings</option>
+          <option value="Adjustments">Adjustments</option>
+          <option value="Returns">Returns</option>
+          <option value="Expenses">Expenses</option>
+          <option value="Payments">Payments</option>
+          <option value="Debts">Debts</option>
+          <option value="Reports">Reports</option>
+        </select>
+        <select id="audit-user-filter"
+          class="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Users</option>
+        </select>
+        <button id="btn-apply-audit-filter"
+          class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition">
+          <i class="fa-solid fa-filter mr-1"></i>Apply
+        </button>
+        <button id="btn-reset-audit-filter"
+          class="px-4 py-2 text-sm border border-slate-200 hover:bg-slate-100 rounded-lg font-medium transition text-slate-600">
+          <i class="fa-solid fa-rotate-left mr-1"></i>Reset
+        </button>
+      </div>
+
+      <!-- Audit Table -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Timestamp</th>
+                <th class="text-left px-4 py-3 font-semibold text-slate-600">User</th>
+                <th class="text-left px-4 py-3 font-semibold text-slate-600">Action</th>
+                <th class="text-left px-4 py-3 font-semibold text-slate-600">Module</th>
+                <th class="text-left px-4 py-3 font-semibold text-slate-600">Details</th>
+                <th class="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">IP Address</th>
+              </tr>
+            </thead>
+            <tbody id="audit-tbody" class="divide-y divide-slate-100">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Audit Empty -->
+        <div id="audit-empty" class="hidden flex flex-col items-center justify-center py-16 text-slate-400">
+          <i class="fa-solid fa-clipboard-list text-5xl mb-4 opacity-30"></i>
+          <p class="text-lg font-medium">No audit logs found</p>
+          <p class="text-sm mt-1">Try adjusting your filters.</p>
+        </div>
+
+        <!-- Audit Loading -->
+        <div id="audit-loading" class="flex justify-center py-12">
+          <div class="flex items-center gap-2 text-slate-400">
+            <i class="fa-solid fa-spinner fa-spin text-xl"></i>
+            <span class="text-sm">Loading logs…</span>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="audit-pagination-wrap" class="hidden px-4 py-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p id="audit-pagination-info" class="text-xs text-slate-500"></p>
+          <div id="audit-pagination-btns" class="flex gap-1"></div>
+        </div>
+      </div>
+
+    </div><!-- /tab-audit -->
+
+  </div><!-- /p-6 -->
+
+</div><!-- /app-layout -->
+
+<!-- ===== ADD / EDIT USER MODAL ===== -->
+<div id="user-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <!-- Backdrop -->
+  <div id="modal-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+  <!-- Panel -->
+  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md z-10 overflow-hidden">
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+      <h2 id="modal-title" class="text-lg font-bold text-slate-800">Add User</h2>
+      <button id="modal-close" class="text-slate-400 hover:text-slate-600 transition text-xl leading-none">&times;</button>
+    </div>
+    <!-- Modal Body -->
+    <form id="user-form" class="px-6 py-5 space-y-4" novalidate>
+      <input type="hidden" id="edit-user-id" value="" />
+
+      <div class="grid grid-cols-1 gap-4">
+        <!-- Name -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Full Name <span class="text-red-500">*</span></label>
+          <input id="field-name" type="text" placeholder="e.g. John Doe"
+            class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+        </div>
+        <!-- Email -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Email <span class="text-red-500">*</span></label>
+          <input id="field-email" type="email" placeholder="john@example.com"
+            class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+        </div>
+        <!-- Phone -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Phone</label>
+          <input id="field-phone" type="text" placeholder="+1 555 000 0000"
+            class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <!-- Role & Status row -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Role <span class="text-red-500">*</span></label>
+            <select id="field-role"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Select…</option>
+              <option value="Admin">Admin</option>
+              <option value="Manager">Manager</option>
+              <option value="Sales">Sales</option>
+              <option value="Inventory">Inventory</option>
+              <option value="Accountant">Accountant</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+            <select id="field-status"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <!-- Password -->
+        <div>
+          <label id="password-label" class="block text-xs font-semibold text-slate-600 mb-1">
+            Password <span id="password-required-star" class="text-red-500">*</span>
+          </label>
+          <div class="relative">
+            <input id="field-password" type="password" placeholder="Enter password"
+              class="w-full px-3 py-2 pr-10 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <button type="button" id="toggle-password"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+          <p id="password-hint" class="hidden text-xs text-slate-400 mt-1">Leave blank to keep the current password.</p>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" id="modal-cancel"
+          class="px-4 py-2 text-sm border border-slate-200 hover:bg-slate-100 rounded-lg font-medium text-slate-700 transition">Cancel</button>
+        <button type="submit" id="modal-submit"
+          class="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow transition flex items-center gap-2">
+          <i class="fa-solid fa-floppy-disk"></i> Save User
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== SCRIPTS ===== -->
+<script src="/js/api.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>Layout.init('users');</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+  /* ─────────────────────────────────────────────
+     STATE
+  ───────────────────────────────────────────── */
+  let allUsers = [];
+  let auditPage = 1;
+  const AUDIT_LIMIT = 50;
+  let auditTotalPages = 1;
+  let auditLoaded = false;
+
+  /* ─────────────────────────────────────────────
+     TABS
+  ───────────────────────────────────────────── */
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const tabPanels = { users: document.getElementById('tab-users'), audit: document.getElementById('tab-audit') };
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.tab;
+      tabBtns.forEach(b => {
+        b.classList.toggle('border-blue-600', b.dataset.tab === key);
+        b.classList.toggle('text-blue-600', b.dataset.tab === key);
+        b.classList.toggle('border-transparent', b.dataset.tab !== key);
+        b.classList.toggle('text-slate-500', b.dataset.tab !== key);
+      });
+      Object.entries(tabPanels).forEach(([k, el]) => el.classList.toggle('hidden', k !== key));
+      if (key === 'audit' && !auditLoaded) {
+        auditLoaded = true;
+        loadAuditLogs();
+      }
+    });
+  });
+
+  /* ─────────────────────────────────────────────
+     HELPERS
+  ───────────────────────────────────────────── */
+  function initials(name) {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    return parts.length >= 2
+      ? (parts[0][0] + parts[1][0]).toUpperCase()
+      : name[0].toUpperCase();
+  }
+
+  const ROLE_COLORS = {
+    Admin:      'bg-red-100 text-red-700',
+    Manager:    'bg-purple-100 text-purple-700',
+    Sales:      'bg-blue-100 text-blue-700',
+    Inventory:  'bg-green-100 text-green-700',
+    Accountant: 'bg-yellow-100 text-yellow-700',
+  };
+
+  const ROLE_AVATAR_COLORS = {
+    Admin:      'bg-red-500',
+    Manager:    'bg-purple-500',
+    Sales:      'bg-blue-500',
+    Inventory:  'bg-green-600',
+    Accountant: 'bg-yellow-500',
+  };
+
+  const MODULE_COLORS = {
+    Auth:        'bg-slate-100 text-slate-700',
+    Products:    'bg-blue-100 text-blue-700',
+    Sales:       'bg-green-100 text-green-700',
+    Purchases:   'bg-indigo-100 text-indigo-700',
+    Stock:       'bg-cyan-100 text-cyan-700',
+    Users:       'bg-red-100 text-red-700',
+    Settings:    'bg-slate-200 text-slate-800',
+    Adjustments: 'bg-orange-100 text-orange-700',
+    Returns:     'bg-pink-100 text-pink-700',
+    Expenses:    'bg-rose-100 text-rose-700',
+    Payments:    'bg-emerald-100 text-emerald-700',
+    Debts:       'bg-yellow-100 text-yellow-700',
+    Reports:     'bg-violet-100 text-violet-700',
+  };
+
+  function formatDate(str) {
+    if (!str) return '—';
+    const d = new Date(str);
+    return isNaN(d) ? str : d.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+  }
+
+  function formatDateTime(str) {
+    if (!str) return '—';
+    const d = new Date(str);
+    return isNaN(d) ? str : d.toLocaleString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+
+  /* ─────────────────────────────────────────────
+     LOAD USERS
+  ───────────────────────────────────────────── */
+  const usersGrid    = document.getElementById('users-grid');
+  const usersEmpty   = document.getElementById('users-empty');
+  const usersLoading = document.getElementById('users-loading');
+
+  async function loadUsers() {
+    usersLoading.classList.remove('hidden');
+    usersGrid.innerHTML = '';
+    usersEmpty.classList.add('hidden');
+
+    const search = document.getElementById('search-input').value.trim();
+    const role   = document.getElementById('role-filter').value;
+    const status = document.getElementById('status-filter').value;
+
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (role)   params.set('role', role);
+    if (status) params.set('status', status);
+
+    try {
+      const res = await API.get(`/users?${params.toString()}`);
+      allUsers = Array.isArray(res) ? res : (res.data || res.users || []);
+      renderUserCards(allUsers);
+
+      // Populate user filter in audit tab
+      populateAuditUserFilter(allUsers);
+    } catch (err) {
+      console.error(err);
+      Toast.error('Failed to load users.');
+    } finally {
+      usersLoading.classList.add('hidden');
+    }
+  }
+
+  function renderUserCards(users) {
+    usersGrid.innerHTML = '';
+    if (!users.length) {
+      usersEmpty.classList.remove('hidden');
+      return;
+    }
+    usersEmpty.classList.add('hidden');
+    users.forEach(user => {
+      const avatarBg = ROLE_AVATAR_COLORS[user.role] || 'bg-slate-400';
+      const roleClass  = ROLE_COLORS[user.role] || 'bg-slate-100 text-slate-700';
+      const statusClass = user.status === 'active'
+        ? 'bg-green-100 text-green-700'
+        : 'bg-slate-100 text-slate-500';
+      const statusText = user.status === 'active' ? 'Active' : 'Inactive';
+      const toggleLabel = user.status === 'active' ? 'Deactivate' : 'Activate';
+      const toggleIcon  = user.status === 'active' ? 'fa-user-slash' : 'fa-user-check';
+      const toggleColor = user.status === 'active'
+        ? 'text-red-500 hover:bg-red-50'
+        : 'text-green-600 hover:bg-green-50';
+
+      const card = document.createElement('div');
+      card.className = 'bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-shadow';
+      card.innerHTML = `
+        <div class="flex items-start gap-3">
+          <div class="w-12 h-12 rounded-full ${avatarBg} flex items-center justify-center text-white text-lg font-bold flex-shrink-0 select-none">
+            ${initials(user.name)}
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-slate-800 truncate">${escHtml(user.name)}</p>
+            <p class="text-xs text-slate-500 truncate">${escHtml(user.email)}</p>
+            ${user.phone ? `<p class="text-xs text-slate-400 mt-0.5"><i class="fa-solid fa-phone text-[10px] mr-1"></i>${escHtml(user.phone)}</p>` : ''}
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${roleClass}">
+            ${escHtml(user.role)}
+          </span>
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusClass}">
+            <span class="w-1.5 h-1.5 rounded-full mr-1 ${user.status === 'active' ? 'bg-green-500' : 'bg-slate-400'}"></span>
+            ${statusText}
+          </span>
+        </div>
+        <div class="text-xs text-slate-400">
+          <i class="fa-regular fa-clock mr-1"></i>
+          Last login: ${formatDate(user.last_login)}
+        </div>
+        <div class="flex gap-2 border-t border-slate-100 pt-3">
+          <button data-id="${user.id}" data-action="edit"
+            class="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg py-1.5 transition">
+            <i class="fa-solid fa-pen-to-square"></i> Edit
+          </button>
+          <button data-id="${user.id}" data-action="toggle" data-status="${user.status}"
+            class="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium ${toggleColor} rounded-lg py-1.5 transition">
+            <i class="fa-solid ${toggleIcon}"></i> ${toggleLabel}
+          </button>
+        </div>
+      `;
+      usersGrid.appendChild(card);
+    });
+
+    // Delegate card action events
+    usersGrid.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        if (btn.dataset.action === 'edit') {
+          const user = allUsers.find(u => String(u.id) === String(id));
+          if (user) openEditModal(user);
+        } else if (btn.dataset.action === 'toggle') {
+          handleToggleStatus(id, btn.dataset.status);
+        }
+      });
+    });
+  }
+
+  function escHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /* ─────────────────────────────────────────────
+     TOGGLE STATUS
+  ───────────────────────────────────────────── */
+  async function handleToggleStatus(userId, currentStatus) {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    const label = newStatus === 'active' ? 'activate' : 'deactivate';
+    try {
+      await API.put(`/users/${userId}/status`, { status: newStatus });
+      Toast.success(`User ${label}d successfully.`);
+      loadUsers();
+    } catch (err) {
+      console.error(err);
+      Toast.error(`Failed to ${label} user.`);
+    }
+  }
+
+  /* ─────────────────────────────────────────────
+     USER MODAL
+  ───────────────────────────────────────────── */
+  const userModal     = document.getElementById('user-modal');
+  const modalTitle    = document.getElementById('modal-title');
+  const userForm      = document.getElementById('user-form');
+  const editUserId    = document.getElementById('edit-user-id');
+  const fieldName     = document.getElementById('field-name');
+  const fieldEmail    = document.getElementById('field-email');
+  const fieldPhone    = document.getElementById('field-phone');
+  const fieldRole     = document.getElementById('field-role');
+  const fieldStatus   = document.getElementById('field-status');
+  const fieldPassword = document.getElementById('field-password');
+  const pwdRequired   = document.getElementById('password-required-star');
+  const pwdHint       = document.getElementById('password-hint');
+  const togglePwdBtn  = document.getElementById('toggle-password');
+
+  function openModal() { userModal.classList.remove('hidden'); }
+  function closeModal() { userModal.classList.add('hidden'); userForm.reset(); editUserId.value = ''; }
+
+  function openAddModal() {
+    modalTitle.textContent = 'Add User';
+    editUserId.value = '';
+    fieldName.value = '';
+    fieldEmail.value = '';
+    fieldPhone.value = '';
+    fieldRole.value = '';
+    fieldStatus.value = 'active';
+    fieldPassword.value = '';
+    pwdRequired.classList.remove('hidden');
+    pwdHint.classList.add('hidden');
+    fieldPassword.placeholder = 'Enter password';
+    openModal();
+  }
+
+  function openEditModal(user) {
+    modalTitle.textContent = 'Edit User';
+    editUserId.value = user.id;
+    fieldName.value  = user.name  || '';
+    fieldEmail.value = user.email || '';
+    fieldPhone.value = user.phone || '';
+    fieldRole.value  = user.role  || '';
+    fieldStatus.value = user.status || 'active';
+    fieldPassword.value = '';
+    pwdRequired.classList.add('hidden');
+    pwdHint.classList.remove('hidden');
+    fieldPassword.placeholder = 'New password (leave blank to keep current)';
+    openModal();
+  }
+
+  // Password visibility toggle
+  togglePwdBtn.addEventListener('click', () => {
+    const isText = fieldPassword.type === 'text';
+    fieldPassword.type = isText ? 'password' : 'text';
+    togglePwdBtn.querySelector('i').className = `fa-solid fa-eye${isText ? '' : '-slash'}`;
+  });
+
+  document.getElementById('btn-add-user').addEventListener('click', openAddModal);
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', closeModal);
+
+  /* ─────────────────────────────────────────────
+     FORM SUBMIT
+  ───────────────────────────────────────────── */
+  userForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id       = editUserId.value;
+    const isEdit   = !!id;
+    const name     = fieldName.value.trim();
+    const email    = fieldEmail.value.trim();
+    const phone    = fieldPhone.value.trim();
+    const role     = fieldRole.value;
+    const status   = fieldStatus.value;
+    const password = fieldPassword.value;
+
+    if (!name || !email || !role) {
+      Toast.error('Please fill in all required fields.');
+      return;
+    }
+    if (!isEdit && !password) {
+      Toast.error('Password is required for new users.');
+      return;
+    }
+
+    const payload = { name, email, phone, role, status };
+    if (!isEdit) {
+      payload.password = password;
+    } else if (password) {
+      payload.new_password = password;
+    }
+
+    const submitBtn = document.getElementById('modal-submit');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+    try {
+      if (isEdit) {
+        await API.put(`/users/${id}`, payload);
+        Toast.success('User updated successfully.');
+      } else {
+        await API.post('/users', payload);
+        Toast.success('User created successfully.');
+      }
+      closeModal();
+      loadUsers();
+    } catch (err) {
+      console.error(err);
+      const msg = err?.message || (isEdit ? 'Failed to update user.' : 'Failed to create user.');
+      Toast.error(msg);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save User';
+    }
+  });
+
+  /* ─────────────────────────────────────────────
+     FILTERS (debounced search)
+  ───────────────────────────────────────────── */
+  let searchTimer;
+  document.getElementById('search-input').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadUsers, 350);
+  });
+  document.getElementById('role-filter').addEventListener('change', loadUsers);
+  document.getElementById('status-filter').addEventListener('change', loadUsers);
+
+  /* ─────────────────────────────────────────────
+     AUDIT LOGS
+  ───────────────────────────────────────────── */
+  const auditTbody     = document.getElementById('audit-tbody');
+  const auditEmpty     = document.getElementById('audit-empty');
+  const auditLoading   = document.getElementById('audit-loading');
+  const auditPagWrap   = document.getElementById('audit-pagination-wrap');
+  const auditPagInfo   = document.getElementById('audit-pagination-info');
+  const auditPagBtns   = document.getElementById('audit-pagination-btns');
+
+  function populateAuditUserFilter(users) {
+    const sel = document.getElementById('audit-user-filter');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All Users</option>';
+    users.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.name;
+      if (String(u.id) === String(current)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function loadAuditLogs() {
+    auditLoading.classList.remove('hidden');
+    auditTbody.innerHTML = '';
+    auditEmpty.classList.add('hidden');
+    auditPagWrap.classList.add('hidden');
+
+    const module  = document.getElementById('audit-module-filter').value;
+    const userId  = document.getElementById('audit-user-filter').value;
+
+    const params = new URLSearchParams({ page: auditPage, limit: AUDIT_LIMIT });
+    if (module)  params.set('module', module);
+    if (userId)  params.set('user_id', userId);
+
+    try {
+      const res = await API.get(`/users/audit-logs?${params.toString()}`);
+      const data = res?.data || res;
+      const logs = data?.logs || [];
+      const pagination = data?.pagination || {};
+
+      auditTotalPages = pagination.totalPages || pagination.total_pages || 1;
+      const total     = pagination.total || logs.length;
+      const from      = ((auditPage - 1) * AUDIT_LIMIT) + 1;
+      const to        = Math.min(auditPage * AUDIT_LIMIT, total);
+
+      auditLoading.classList.add('hidden');
+
+      if (!logs.length) {
+        auditEmpty.classList.remove('hidden');
+        return;
+      }
+
+      logs.forEach(log => {
+        const modColor = MODULE_COLORS[log.module] || 'bg-slate-100 text-slate-600';
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition-colors';
+        tr.innerHTML = `
+          <td class="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">${formatDateTime(log.created_at)}</td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 flex-shrink-0">
+                ${initials(log.user_name)}
+              </div>
+              <span class="text-sm text-slate-700 whitespace-nowrap">${escHtml(log.user_name || '—')}</span>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-sm text-slate-700">${escHtml(log.action || '—')}</td>
+          <td class="px-4 py-3">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${modColor}">
+              ${escHtml(log.module || '—')}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-xs text-slate-500 max-w-xs truncate" title="${escHtml(log.details || '')}">
+            ${escHtml(log.details || '—')}
+          </td>
+          <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap font-mono">${escHtml(log.ip_address || '—')}</td>
+        `;
+        auditTbody.appendChild(tr);
+      });
+
+      // Pagination info
+      if (total > 0) {
+        auditPagInfo.textContent = `Showing ${from}–${to} of ${total} entries`;
+      }
+      renderAuditPagination();
+      auditPagWrap.classList.remove('hidden');
+
+    } catch (err) {
+      console.error(err);
+      auditLoading.classList.add('hidden');
+      Toast.error('Failed to load audit logs.');
+    }
+  }
+
+  function renderAuditPagination() {
+    auditPagBtns.innerHTML = '';
+    const maxVisible = 5;
+    let startPage = Math.max(1, auditPage - Math.floor(maxVisible / 2));
+    let endPage   = Math.min(auditTotalPages, startPage + maxVisible - 1);
+    if (endPage - startPage < maxVisible - 1) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    const btnBase = 'px-2.5 py-1 text-xs rounded border transition font-medium';
+    const btnActive = 'bg-blue-600 text-white border-blue-600';
+    const btnInactive = 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50';
+
+    // Prev
+    const prev = document.createElement('button');
+    prev.innerHTML = '<i class="fa-solid fa-chevron-left"></i>';
+    prev.className = `${btnBase} ${btnInactive} ${auditPage === 1 ? 'opacity-40 pointer-events-none' : ''}`;
+    prev.addEventListener('click', () => { auditPage--; loadAuditLogs(); });
+    auditPagBtns.appendChild(prev);
+
+    for (let p = startPage; p <= endPage; p++) {
+      const btn = document.createElement('button');
+      btn.textContent = p;
+      btn.className = `${btnBase} ${p === auditPage ? btnActive : btnInactive}`;
+      btn.addEventListener('click', () => { auditPage = p; loadAuditLogs(); });
+      auditPagBtns.appendChild(btn);
+    }
+
+    // Next
+    const next = document.createElement('button');
+    next.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+    next.className = `${btnBase} ${btnInactive} ${auditPage >= auditTotalPages ? 'opacity-40 pointer-events-none' : ''}`;
+    next.addEventListener('click', () => { auditPage++; loadAuditLogs(); });
+    auditPagBtns.appendChild(next);
+  }
+
+  // Audit filter events
+  document.getElementById('btn-apply-audit-filter').addEventListener('click', () => {
+    auditPage = 1;
+    loadAuditLogs();
+  });
+  document.getElementById('btn-reset-audit-filter').addEventListener('click', () => {
+    document.getElementById('audit-module-filter').value = '';
+    document.getElementById('audit-user-filter').value = '';
+    auditPage = 1;
+    loadAuditLogs();
+  });
+
+  /* ─────────────────────────────────────────────
+     INIT
+  ───────────────────────────────────────────── */
+  loadUsers();
+});
+</script>
+</body>
+</html>

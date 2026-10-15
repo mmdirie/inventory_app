@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Apex Inventory Management System</title>
+  <script src="/js/auth.js"></script>
+</head>
+<body style="background-color: #0f172a; color: white; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
+  <div style="text-align: center;">
+    <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem;">Apex Inventory System</h2>
+    <p style="color: #94a3b8; font-size: 0.9rem;">Initializing application session...</p>
+  </div>
+  <script>
+    if (Auth.isAuthenticated()) {
+      window.location.replace('/dashboard.html');
+    } else {
+      window.location.replace('/login.html');
+    }
+  </script>
+</body>
+</html>

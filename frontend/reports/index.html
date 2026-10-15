@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports Hub - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" /><link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50"><div id="app-layout">
+  <div class="mb-6"><h1 class="text-2xl font-black text-slate-900">Reports Hub</h1><p class="text-xs text-slate-500 mt-1">Explore sales, purchasing, inventory valuation, and financial summaries.</p></div>
+  <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-5 grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+    <select id="report-type" class="px-3 py-2 text-xs border rounded-xl"><option value="sales">Sales</option><option value="purchases">Purchases</option><option value="inventory">Inventory</option><option value="financial">Financial</option></select>
+    <input id="start-date" type="date" class="px-3 py-2 text-xs border rounded-xl" /><input id="end-date" type="date" class="px-3 py-2 text-xs border rounded-xl" />
+    <select id="group-by" class="px-3 py-2 text-xs border rounded-xl"><option value="date">By date</option><option value="month">By month</option><option value="product">By product</option><option value="customer">By customer</option><option value="user">By staff</option></select>
+    <button id="run-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl"><i class="fa-solid fa-chart-line mr-2"></i>Run report</button>
+  </section>
+  <div id="report-error" class="hidden mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"></div>
+  <section id="summary" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5"></section>
+  <section id="breakdowns" class="space-y-5"></section>
+</div>
+<script src="/js/api.js"></script><script src="/js/toast.js"></script><script src="/js/auth.js"></script><script src="/js/layout.js"></script><script src="/js/ui.js"></script><script>
+Layout.init('reports');
+const reportType = document.getElementById('report-type');
+const groupBy = document.getElementById('group-by');
+const summaryNode = document.getElementById('summary');
+const breakdownNode = document.getElementById('breakdowns');
+const errorNode = document.getElementById('report-error');
+function setGroupingOptions() {
+  const groups = reportType.value === 'sales'
+    ? [['date', 'By date'], ['month', 'By month'], ['product', 'By product'], ['customer', 'By customer'], ['user', 'By staff']]
+    : [['date', 'By date'], ['supplier', 'By supplier'], ['product', 'By product']];
+  groupBy.innerHTML = groups.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+  groupBy.disabled = reportType.value === 'inventory' || reportType.value === 'financial';
+  document.getElementById('start-date').disabled = reportType.value === 'inventory';
+  document.getElementById('end-date').disabled = reportType.value === 'inventory';
+}
+function displayValue(key, value) {
+  const amountKey = /(revenue|cost|price|value|amount|paid|collected|debt|payable|profit|expense|discount|tax|subtotal|cash)/i.test(key);
+  return amountKey ? UI.money(value) : UI.escape(value == null ? '—' : value);
+}
+function renderCards(record) {
+  const entries = Object.entries(record || {});
+  summaryNode.innerHTML = entries.map(([key, value]) => `<article class="bg-white rounded-2xl border border-slate-200 p-5"><p class="text-xs font-bold uppercase tracking-wide text-slate-500">${UI.escape(key.replace(/_/g, ' '))}</p><p class="text-xl font-black text-slate-900 mt-2">${displayValue(key, value)}</p></article>`).join('');
+}
+function renderTable(title, rows) {
+  if (!Array.isArray(rows)) return '';
+  if (!rows.length) return `<article class="bg-white rounded-2xl border border-slate-200 p-5"><h2 class="font-bold text-slate-900">${UI.escape(title)}</h2><p class="mt-3 text-sm text-slate-500">No data for this report.</p></article>`;
+  const columns = Object.keys(rows[0]);
+  return `<article class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"><h2 class="font-bold text-slate-900 p-5 border-b">${UI.escape(title)}</h2><div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-slate-500 uppercase"><tr>${columns.map(column => `<th class="p-4">${UI.escape(column.replace(/_/g, ' '))}</th>`).join('')}</tr></thead><tbody class="divide-y divide-slate-100">${rows.map(row => `<tr>${columns.map(column => `<td class="p-4">${displayValue(column, row[column])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></article>`;
+}
+async function loadReport() {
+  const type = reportType.value;
+  errorNode.classList.add('hidden'); summaryNode.innerHTML = ''; breakdownNode.innerHTML = '<div class="bg-white p-8 rounded-2xl border text-center text-slate-500">Generating report…</div>';
+  const params = { start_date: document.getElementById('start-date').value, end_date: document.getElementById('end-date').value };
+  if (type === 'sales' || type === 'purchases') params.group_by = groupBy.value;
+  try {
+    const response = await API.get(`/reports/${type}`, params);
+    const data = response.data;
+    if (type === 'sales' || type === 'purchases') {
+      renderCards(data.summary);
+      breakdownNode.innerHTML = renderTable(`${type === 'sales' ? 'Sales' : 'Purchase'} breakdown · ${data.group_by}`, data.breakdown);
+    } else if (type === 'inventory') {
+      renderCards(data.valuation);
+      breakdownNode.innerHTML = renderTable('Stock by category', data.category_breakdown) + renderTable('Stock by warehouse', data.warehouse_breakdown) + renderTable('Low stock items', data.low_stock_items);
+    } else {
+      renderCards(data);
+      breakdownNode.innerHTML = '';
+    }
+  } catch (error) {
+    summaryNode.innerHTML = ''; breakdownNode.innerHTML = '';
+    errorNode.textContent = error.message; errorNode.classList.remove('hidden');
+  }
+}
+reportType.addEventListener('change', () => { setGroupingOptions(); });
+document.getElementById('run-btn').addEventListener('click', loadReport);
+setGroupingOptions(); loadReport();
+</script></body></html>

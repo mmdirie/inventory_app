@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Returns Management - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+
+    <!-- PAGE CONTENT -->
+    <div class="p-6 space-y-6">
+
+      <!-- Page Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-black text-slate-900 tracking-tight">Returns Management</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Track and process sale returns and purchase returns</p>
+        </div>
+        <button
+          onclick="openNewReturnModal()"
+          class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-600/20 transition"
+        >
+          <i class="fa-solid fa-plus"></i>
+          New Return
+        </button>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4">
+        <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-filter text-slate-400 text-sm"></i>
+            <span class="text-xs font-bold text-slate-600 uppercase tracking-wider">Filters</span>
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <div class="relative">
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Return Type</label>
+              <select
+                id="filter-type"
+                onchange="applyFilters()"
+                class="pl-3 pr-8 py-2 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700 min-w-[160px]"
+              >
+                <option value="">All Types</option>
+                <option value="Sale Return">Sale Return</option>
+                <option value="Purchase Return">Purchase Return</option>
+              </select>
+            </div>
+          </div>
+          <div class="sm:ml-auto">
+            <button onclick="applyFilters()" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">
+              <i class="fa-solid fa-arrows-rotate"></i> Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Returns Table -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 class="text-sm font-bold text-slate-800">
+            <i class="fa-solid fa-rotate-left mr-2 text-blue-600"></i>
+            Returns List
+          </h2>
+          <span id="total-count" class="text-xs text-slate-500 font-medium">Loading...</span>
+        </div>
+
+        <!-- Table Wrapper -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-100">
+                <th class="px-4 py-3 text-left font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Return #</th>
+                <th class="px-4 py-3 text-left font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Type</th>
+                <th class="px-4 py-3 text-left font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Reference / Invoice</th>
+                <th class="px-4 py-3 text-left font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Customer / Supplier</th>
+                <th class="px-4 py-3 text-left font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Warehouse</th>
+                <th class="px-4 py-3 text-center font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Items</th>
+                <th class="px-4 py-3 text-right font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Refund Amount</th>
+                <th class="px-4 py-3 text-left font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Reason</th>
+                <th class="px-4 py-3 text-left font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Date</th>
+                <th class="px-4 py-3 text-center font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="returns-tbody" class="divide-y divide-slate-50">
+              <tr>
+                <td colspan="10" class="px-4 py-12 text-center text-slate-400">
+                  <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block text-slate-300"></i>
+                  Loading returns...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div id="page-info" class="text-xs text-slate-500 font-medium"></div>
+          <div class="flex items-center gap-1.5" id="pagination-controls"></div>
+        </div>
+      </div>
+
+    </div><!-- /page content -->
+  </div><!-- /app-layout -->
+
+  <!-- ============================================================
+       VIEW DETAILS MODAL
+  ============================================================ -->
+  <div id="view-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-100 my-8">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div>
+          <h3 class="text-base font-bold text-slate-900" id="view-modal-title">Return Details</h3>
+          <p id="view-modal-subtitle" class="text-xs text-slate-500 mt-0.5"></p>
+        </div>
+        <button onclick="closeViewModal()" class="text-slate-400 hover:text-slate-600 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Body -->
+      <div class="p-6 space-y-5">
+
+        <!-- Info Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div class="bg-slate-50 rounded-xl p-3">
+            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Type</span>
+            <span id="view-type" class="block text-xs font-bold text-slate-800 mt-1"></span>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Invoice</span>
+            <span id="view-invoice" class="block text-xs font-bold text-slate-800 mt-1"></span>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Customer / Supplier</span>
+            <span id="view-party" class="block text-xs font-bold text-slate-800 mt-1"></span>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Warehouse</span>
+            <span id="view-warehouse" class="block text-xs font-bold text-slate-800 mt-1"></span>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Return Date</span>
+            <span id="view-date" class="block text-xs font-bold text-slate-800 mt-1"></span>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Processed By</span>
+            <span id="view-created-by" class="block text-xs font-bold text-slate-800 mt-1"></span>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3 col-span-2 sm:col-span-3">
+            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reason</span>
+            <span id="view-reason" class="block text-xs text-slate-700 mt-1"></span>
+          </div>
+        </div>
+
+        <!-- Refund Summary -->
+        <div class="flex justify-end">
+          <div class="bg-blue-50 border border-blue-100 rounded-xl px-5 py-3 flex items-center gap-4">
+            <span class="text-xs font-bold text-blue-700 uppercase tracking-wider">Total Refund Amount</span>
+            <span id="view-refund" class="text-xl font-black text-blue-700"></span>
+          </div>
+        </div>
+
+        <!-- Items Table -->
+        <div>
+          <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Returned Items</h4>
+          <div class="overflow-x-auto rounded-xl border border-slate-100">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-100">
+                  <th class="px-4 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wider">Product</th>
+                  <th class="px-4 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wider">SKU</th>
+                  <th class="px-4 py-2.5 text-center font-bold text-slate-500 uppercase tracking-wider">Qty</th>
+                  <th class="px-4 py-2.5 text-right font-bold text-slate-500 uppercase tracking-wider">Unit Price</th>
+                  <th class="px-4 py-2.5 text-right font-bold text-slate-500 uppercase tracking-wider">Total</th>
+                </tr>
+              </thead>
+              <tbody id="view-items-tbody" class="divide-y divide-slate-50">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="px-6 py-4 border-t border-slate-100 flex justify-end">
+        <button onclick="closeViewModal()" class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl transition">
+          Close
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       NEW RETURN MODAL
+  ============================================================ -->
+  <div id="new-return-modal" class="fixed inset-0 z-50 flex items-start justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-100 my-8">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div>
+          <h3 class="text-base font-bold text-slate-900">New Return</h3>
+          <p class="text-xs text-slate-500 mt-0.5">Create a sale return or purchase return</p>
+        </div>
+        <button onclick="closeNewReturnModal()" class="text-slate-400 hover:text-slate-600 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Form Body -->
+      <form id="new-return-form" onsubmit="submitNewReturn(event)" class="p-6 space-y-5">
+
+        <!-- Row 1: Return Type + Reference -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">
+              Return Type <span class="text-rose-500">*</span>
+            </label>
+            <select
+              id="nr-type"
+              onchange="handleReturnTypeChange()"
+              required
+              class="w-full px-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">— Select Type —</option>
+              <option value="Sale Return">Sale Return</option>
+              <option value="Purchase Return">Purchase Return</option>
+            </select>
+          </div>
+
+          <!-- Dynamic Reference (Sale or Purchase) -->
+          <div id="nr-reference-block" class="hidden">
+            <label class="block text-xs font-bold text-slate-700 mb-1.5" id="nr-reference-label">
+              Reference <span class="text-rose-500">*</span>
+            </label>
+            <select
+              id="nr-reference"
+              required
+              class="w-full px-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">— Loading... —</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Row 2: Warehouse + Return Date -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">
+              Warehouse <span class="text-rose-500">*</span>
+            </label>
+            <select
+              id="nr-warehouse"
+              required
+              class="w-full px-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">— Select Warehouse —</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">
+              Return Date <span class="text-rose-500">*</span>
+            </label>
+            <input
+              type="date"
+              id="nr-date"
+              required
+              class="w-full px-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+          </div>
+        </div>
+
+        <!-- Row 3: Reason + Refund Amount -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">Reason</label>
+            <textarea
+              id="nr-reason"
+              rows="3"
+              placeholder="Describe the reason for return..."
+              class="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            ></textarea>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">
+              Refund Amount ($) <span class="text-rose-500">*</span>
+            </label>
+            <input
+              type="number"
+              id="nr-refund"
+              step="0.01"
+              min="0"
+              required
+              placeholder="0.00"
+              class="w-full px-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p class="text-[10px] text-slate-400 mt-1 font-medium">Auto-calculated from items or set manually</p>
+          </div>
+        </div>
+
+        <!-- Items Section -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <i class="fa-solid fa-boxes-stacked mr-1.5 text-blue-600"></i>
+              Returned Items
+            </h4>
+            <button
+              type="button"
+              onclick="addItemRow()"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 transition"
+            >
+              <i class="fa-solid fa-plus text-[10px]"></i> Add Item
+            </button>
+          </div>
+
+          <!-- Items Table -->
+          <div class="overflow-x-auto rounded-xl border border-slate-100">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-100">
+                  <th class="px-3 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wider w-2/5">Product</th>
+                  <th class="px-3 py-2.5 text-center font-bold text-slate-500 uppercase tracking-wider w-1/6">Quantity</th>
+                  <th class="px-3 py-2.5 text-right font-bold text-slate-500 uppercase tracking-wider w-1/5">Unit Price ($)</th>
+                  <th class="px-3 py-2.5 text-right font-bold text-slate-500 uppercase tracking-wider w-1/5">Total</th>
+                  <th class="px-3 py-2.5 w-8"></th>
+                </tr>
+              </thead>
+              <tbody id="items-tbody">
+                <!-- Rows injected by JS -->
+              </tbody>
+              <tfoot>
+                <tr class="bg-slate-50 border-t border-slate-200">
+                  <td colspan="3" class="px-3 py-3 text-right text-xs font-bold text-slate-700 uppercase tracking-wider">Grand Total</td>
+                  <td class="px-3 py-3 text-right text-sm font-black text-blue-700" id="items-grand-total">$0.00</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p id="items-empty-hint" class="text-xs text-slate-400 text-center py-4">
+            Click <strong>Add Item</strong> to add returned products.
+          </p>
+        </div>
+
+        <!-- Form Footer -->
+        <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-2">
+          <button
+            type="button"
+            onclick="closeNewReturnModal()"
+            class="px-5 py-2.5 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            id="submit-return-btn"
+            class="px-7 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-600/20 transition inline-flex items-center gap-2"
+          >
+            <i class="fa-solid fa-paper-plane"></i>
+            Submit Return
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('returns');
+
+    // ─── State ───────────────────────────────────────────────────
+    let currentPage = 1;
+    const PAGE_SIZE = 20;
+    let totalPages = 1;
+    let filterType = '';
+
+    let cachedWarehouses = [];
+    let cachedProducts = [];
+    let cachedSales = [];
+    let cachedPurchases = [];
+    let itemRowCount = 0;
+
+    // ─── Format helpers ──────────────────────────────────────────
+    function fmt(amount) {
+      const n = parseFloat(amount) || 0;
+      return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function fmtDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    // ─── Initialization ──────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Set default return date to today
+      const today = new Date().toISOString().slice(0, 10);
+      document.getElementById('nr-date').value = today;
+
+      await Promise.all([loadWarehouses(), loadReturns()]);
+    });
+
+    // ─── Load Warehouses ─────────────────────────────────────────
+    async function loadWarehouses() {
+      try {
+        const res = await API.get('/warehouses');
+        cachedWarehouses = res.data || [];
+        const sel = document.getElementById('nr-warehouse');
+        sel.innerHTML = '<option value="">— Select Warehouse —</option>' +
+          cachedWarehouses.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+      } catch (err) {
+        console.error('Failed to load warehouses:', err);
+      }
+    }
+
+    // ─── Load Returns (Table) ────────────────────────────────────
+    async function loadReturns() {
+      const tbody = document.getElementById('returns-tbody');
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="10" class="px-4 py-12 text-center text-slate-400">
+            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block text-slate-300"></i>
+            Loading returns...
+          </td>
+        </tr>`;
+
+      try {
+        const params = { page: currentPage, limit: PAGE_SIZE };
+        if (filterType) params.return_type = filterType;
+
+        const res = await API.get('/returns', params);
+        const returns = res.data.returns || [];
+        const pagination = res.data.pagination || {};
+
+        totalPages = pagination.total_pages || 1;
+        const total = pagination.total || returns.length;
+
+        document.getElementById('total-count').textContent =
+          `${total} record${total !== 1 ? 's' : ''} found`;
+
+        renderTable(returns);
+        renderPagination(pagination);
+      } catch (err) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="px-4 py-12 text-center text-rose-400 text-xs">
+              <i class="fa-solid fa-triangle-exclamation text-xl mb-2 block"></i>
+              Failed to load returns: ${err.message}
+            </td>
+          </tr>`;
+        Toast.error('Failed to load returns: ' + err.message);
+      }
+    }
+
+    // ─── Render Table Rows ───────────────────────────────────────
+    function renderTable(returns) {
+      const tbody = document.getElementById('returns-tbody');
+
+      if (!returns.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="px-4 py-16 text-center text-slate-400">
+              <i class="fa-solid fa-rotate-left text-4xl mb-3 block text-slate-200"></i>
+              <span class="font-medium">No returns found.</span>
+            </td>
+          </tr>`;
+        return;
+      }
+
+      tbody.innerHTML = returns.map(r => {
+        const typeBadge = r.return_type === 'Sale Return'
+          ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-full border border-blue-100">
+               <i class="fa-solid fa-arrow-rotate-left text-[9px]"></i> Sale Return
+             </span>`
+          : `<span class="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 text-orange-700 text-[10px] font-bold rounded-full border border-orange-100">
+               <i class="fa-solid fa-arrow-rotate-right text-[9px]"></i> Purchase Return
+             </span>`;
+
+        const party = r.return_type === 'Sale Return'
+          ? (r.customer_name || '—')
+          : (r.supplier_name || '—');
+
+        const reason = r.reason
+          ? `<span title="${r.reason}" class="block max-w-[140px] truncate text-slate-600">${r.reason}</span>`
+          : '<span class="text-slate-400">—</span>';
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition group">
+            <td class="px-4 py-3 font-mono font-bold text-blue-700 whitespace-nowrap">${r.return_number || '—'}</td>
+            <td class="px-4 py-3 whitespace-nowrap">${typeBadge}</td>
+            <td class="px-4 py-3 whitespace-nowrap">
+              <span class="font-mono text-slate-700 font-semibold">${r.invoice_number || '—'}</span>
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap">
+              <span class="font-semibold text-slate-800">${party}</span>
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap text-slate-600">${r.warehouse_name || '—'}</td>
+            <td class="px-4 py-3 text-center">
+              <span class="inline-flex items-center justify-center w-7 h-7 bg-slate-100 rounded-full font-bold text-slate-700">${r.item_count || 0}</span>
+            </td>
+            <td class="px-4 py-3 text-right font-bold text-emerald-700 whitespace-nowrap">${fmt(r.refund_amount)}</td>
+            <td class="px-4 py-3">${reason}</td>
+            <td class="px-4 py-3 whitespace-nowrap text-slate-500">${fmtDate(r.return_date)}</td>
+            <td class="px-4 py-3 text-center">
+              <button
+                onclick="viewReturn(${r.id})"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold rounded-lg border border-blue-100 transition"
+              >
+                <i class="fa-solid fa-eye text-[9px]"></i> View
+              </button>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    // ─── Pagination ──────────────────────────────────────────────
+    function renderPagination(pagination) {
+      const total = pagination.total || 0;
+      const from = total === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+      const to = Math.min(currentPage * PAGE_SIZE, total);
+
+      document.getElementById('page-info').textContent =
+        total > 0 ? `Showing ${from}–${to} of ${total}` : 'No records';
+
+      const container = document.getElementById('pagination-controls');
+
+      if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+      }
+
+      let pages = [];
+      // Always show first, last, and ±1 around current
+      for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+          pages.push(i);
+        }
+      }
+      // Deduplicate and sort
+      pages = [...new Set(pages)].sort((a, b) => a - b);
+
+      let html = `
+        <button
+          onclick="changePage(${currentPage - 1})"
+          ${currentPage === 1 ? 'disabled' : ''}
+          class="px-3 py-1.5 rounded-lg text-xs font-bold border ${currentPage === 1 ? 'border-slate-100 text-slate-300 cursor-not-allowed' : 'border-slate-200 text-slate-600 hover:bg-slate-100'} transition"
+        >
+          <i class="fa-solid fa-chevron-left text-[10px]"></i>
+        </button>`;
+
+      let prev = 0;
+      pages.forEach(p => {
+        if (prev && p - prev > 1) {
+          html += `<span class="px-2 text-slate-400 text-xs">…</span>`;
+        }
+        html += `
+          <button
+            onclick="changePage(${p})"
+            class="px-3 py-1.5 rounded-lg text-xs font-bold border transition ${p === currentPage ? 'bg-blue-600 border-blue-600 text-white shadow' : 'border-slate-200 text-slate-600 hover:bg-slate-100'}"
+          >${p}</button>`;
+        prev = p;
+      });
+
+      html += `
+        <button
+          onclick="changePage(${currentPage + 1})"
+          ${currentPage === totalPages ? 'disabled' : ''}
+          class="px-3 py-1.5 rounded-lg text-xs font-bold border ${currentPage === totalPages ? 'border-slate-100 text-slate-300 cursor-not-allowed' : 'border-slate-200 text-slate-600 hover:bg-slate-100'} transition"
+        >
+          <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        </button>`;
+
+      container.innerHTML = html;
+    }
+
+    function changePage(p) {
+      if (p < 1 || p > totalPages) return;
+      currentPage = p;
+      loadReturns();
+    }
+
+    function applyFilters() {
+      filterType = document.getElementById('filter-type').value;
+      currentPage = 1;
+      loadReturns();
+    }
+
+    // ─── View Details Modal ──────────────────────────────────────
+    async function viewReturn(id) {
+      // Show modal with loading state
+      document.getElementById('view-modal-title').textContent = 'Return Details';
+      document.getElementById('view-modal-subtitle').textContent = 'Loading…';
+      document.getElementById('view-items-tbody').innerHTML = `
+        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">
+          <i class="fa-solid fa-spinner fa-spin"></i> Loading items…
+        </td></tr>`;
+      document.getElementById('view-modal').classList.remove('hidden');
+
+      try {
+        const res = await API.get(`/returns/${id}`);
+        const r = res.data;
+
+        document.getElementById('view-modal-title').textContent = `Return ${r.return_number || '#' + id}`;
+        document.getElementById('view-modal-subtitle').textContent =
+          `${r.return_type} — ${fmtDate(r.return_date)}`;
+
+        // Type badge
+        const typeBadge = r.return_type === 'Sale Return'
+          ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full">Sale Return</span>`
+          : `<span class="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 text-orange-700 text-xs font-bold rounded-full">Purchase Return</span>`;
+        document.getElementById('view-type').innerHTML = typeBadge;
+
+        document.getElementById('view-invoice').textContent = r.invoice_number || '—';
+        document.getElementById('view-party').textContent =
+          r.return_type === 'Sale Return' ? (r.customer_name || '—') : (r.supplier_name || '—');
+        document.getElementById('view-warehouse').textContent = r.warehouse_name || '—';
+        document.getElementById('view-date').textContent = fmtDate(r.return_date);
+        document.getElementById('view-created-by').textContent = r.created_by_name || '—';
+        document.getElementById('view-reason').textContent = r.reason || 'No reason provided.';
+        document.getElementById('view-refund').textContent = fmt(r.refund_amount);
+
+        // Items
+        const items = r.items || [];
+        const tbody = document.getElementById('view-items-tbody');
+        if (!items.length) {
+          tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400 text-xs">No items recorded.</td></tr>`;
+        } else {
+          tbody.innerHTML = items.map(item => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-4 py-2.5 font-semibold text-slate-800">${item.product_name || '—'}</td>
+              <td class="px-4 py-2.5 font-mono text-slate-500">${item.product_sku || '—'}</td>
+              <td class="px-4 py-2.5 text-center font-bold text-slate-700">${item.quantity}</td>
+              <td class="px-4 py-2.5 text-right text-slate-700">${fmt(item.unit_price)}</td>
+              <td class="px-4 py-2.5 text-right font-bold text-slate-900">${fmt(item.total)}</td>
+            </tr>`).join('');
+        }
+      } catch (err) {
+        document.getElementById('view-modal-subtitle').textContent = 'Failed to load details';
+        document.getElementById('view-items-tbody').innerHTML = `
+          <tr><td colspan="5" class="px-4 py-8 text-center text-rose-400 text-xs">
+            <i class="fa-solid fa-triangle-exclamation mr-1"></i> ${err.message}
+          </td></tr>`;
+        Toast.error('Failed to load return details: ' + err.message);
+      }
+    }
+
+    function closeViewModal() {
+      document.getElementById('view-modal').classList.add('hidden');
+    }
+
+    // ─── New Return Modal ────────────────────────────────────────
+    function openNewReturnModal() {
+      // Reset form
+      document.getElementById('new-return-form').reset();
+      document.getElementById('nr-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('nr-reference-block').classList.add('hidden');
+      document.getElementById('nr-reference').innerHTML = '<option value="">— Select —</option>';
+      document.getElementById('items-tbody').innerHTML = '';
+      document.getElementById('items-grand-total').textContent = '$0.00';
+      document.getElementById('nr-refund').value = '';
+      document.getElementById('items-empty-hint').classList.remove('hidden');
+      itemRowCount = 0;
+
+      // Reload warehouses just in case
+      const wSel = document.getElementById('nr-warehouse');
+      wSel.innerHTML = '<option value="">— Select Warehouse —</option>' +
+        cachedWarehouses.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+
+      document.getElementById('new-return-modal').classList.remove('hidden');
+    }
+
+    function closeNewReturnModal() {
+      document.getElementById('new-return-modal').classList.add('hidden');
+    }
+
+    // ─── Return Type Change → Load References ───────────────────
+    async function handleReturnTypeChange() {
+      const type = document.getElementById('nr-type').value;
+      const refBlock = document.getElementById('nr-reference-block');
+      const refLabel = document.getElementById('nr-reference-label');
+      const refSel = document.getElementById('nr-reference');
+
+      if (!type) {
+        refBlock.classList.add('hidden');
+        return;
+      }
+
+      refBlock.classList.remove('hidden');
+      refSel.innerHTML = '<option value="">— Loading… —</option>';
+
+      if (type === 'Sale Return') {
+        refLabel.innerHTML = 'Sale Invoice <span class="text-rose-500">*</span>';
+        try {
+          if (!cachedSales.length) {
+            const res = await API.get('/sales', { limit: 100 });
+            cachedSales = res.data.sales || res.data?.data?.sales || [];
+          }
+          refSel.innerHTML = '<option value="">— Select Sale —</option>' +
+            cachedSales.map(s =>
+              `<option value="${s.id}" data-invoice="${s.invoice_number || ''}">${s.invoice_number || 'Sale #' + s.id} — ${s.customer_name || 'Customer'}</option>`
+            ).join('');
+        } catch (err) {
+          refSel.innerHTML = '<option value="">— Failed to load —</option>';
+          Toast.error('Failed to load sales: ' + err.message);
+        }
+      } else {
+        refLabel.innerHTML = 'Purchase Reference <span class="text-rose-500">*</span>';
+        try {
+          if (!cachedPurchases.length) {
+            const res = await API.get('/purchases', { limit: 100 });
+            cachedPurchases = res.data.purchases || res.data?.data?.purchases || [];
+          }
+          refSel.innerHTML = '<option value="">— Select Purchase —</option>' +
+            cachedPurchases.map(p =>
+              `<option value="${p.id}" data-invoice="${p.invoice_number || ''}">${p.invoice_number || 'PO #' + p.id} — ${p.supplier_name || 'Supplier'}</option>`
+            ).join('');
+        } catch (err) {
+          refSel.innerHTML = '<option value="">— Failed to load —</option>';
+          Toast.error('Failed to load purchases: ' + err.message);
+        }
+      }
+    }
+
+    // ─── Load Products (lazy) ────────────────────────────────────
+    async function ensureProducts() {
+      if (cachedProducts.length) return;
+      try {
+        const res = await API.get('/products', { limit: 200 });
+        cachedProducts = res.data.products || res.data?.data?.products || [];
+      } catch (err) {
+        Toast.error('Failed to load products: ' + err.message);
+      }
+    }
+
+    // ─── Dynamic Item Rows ───────────────────────────────────────
+    async function addItemRow() {
+      await ensureProducts();
+
+      const tbody = document.getElementById('items-tbody');
+      document.getElementById('items-empty-hint').classList.add('hidden');
+
+      const rowId = ++itemRowCount;
+
+      const productOptions = cachedProducts.map(p =>
+        `<option value="${p.id}" data-price="${p.selling_price || p.cost_price || 0}">${p.name} (${p.sku || ''})</option>`
+      ).join('');
+
+      const tr = document.createElement('tr');
+      tr.id = `item-row-${rowId}`;
+      tr.className = 'border-t border-slate-50 group';
+      tr.innerHTML = `
+        <td class="px-3 py-2.5">
+          <select
+            onchange="onProductSelect(${rowId})"
+            class="item-product w-full px-2 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="">— Select Product —</option>
+            ${productOptions}
+          </select>
+        </td>
+        <td class="px-3 py-2.5">
+          <input
+            type="number"
+            min="1"
+            value="1"
+            oninput="recalcRow(${rowId})"
+            class="item-qty w-full px-2 py-2 text-xs text-center font-bold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </td>
+        <td class="px-3 py-2.5">
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value="0.00"
+            oninput="recalcRow(${rowId})"
+            class="item-price w-full px-2 py-2 text-xs text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </td>
+        <td class="px-3 py-2.5 text-right">
+          <span class="item-total font-bold text-slate-700 text-xs">$0.00</span>
+        </td>
+        <td class="px-3 py-2.5 text-center">
+          <button
+            type="button"
+            onclick="removeItemRow(${rowId})"
+            class="text-slate-300 hover:text-rose-500 transition group-hover:text-slate-400"
+          >
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </td>`;
+
+      tbody.appendChild(tr);
+      recalcGrandTotal();
+    }
+
+    function onProductSelect(rowId) {
+      const row = document.getElementById(`item-row-${rowId}`);
+      const sel = row.querySelector('.item-product');
+      const priceInput = row.querySelector('.item-price');
+      const selectedOption = sel.options[sel.selectedIndex];
+      const price = parseFloat(selectedOption.dataset.price) || 0;
+      priceInput.value = price.toFixed(2);
+      recalcRow(rowId);
+    }
+
+    function recalcRow(rowId) {
+      const row = document.getElementById(`item-row-${rowId}`);
+      const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+      const price = parseFloat(row.querySelector('.item-price').value) || 0;
+      const total = qty * price;
+      row.querySelector('.item-total').textContent = fmt(total);
+      recalcGrandTotal();
+    }
+
+    function removeItemRow(rowId) {
+      const row = document.getElementById(`item-row-${rowId}`);
+      if (row) row.remove();
+      recalcGrandTotal();
+      // Show hint if empty
+      if (!document.querySelectorAll('#items-tbody tr').length) {
+        document.getElementById('items-empty-hint').classList.remove('hidden');
+      }
+    }
+
+    function recalcGrandTotal() {
+      let grand = 0;
+      document.querySelectorAll('#items-tbody tr').forEach(row => {
+        const totalCell = row.querySelector('.item-total');
+        if (totalCell) {
+          const val = parseFloat(totalCell.textContent.replace(/[$,]/g, '')) || 0;
+          grand += val;
+        }
+      });
+      document.getElementById('items-grand-total').textContent = fmt(grand);
+      // Auto-fill refund amount
+      document.getElementById('nr-refund').value = grand.toFixed(2);
+    }
+
+    // ─── Submit New Return ────────────────────────────────────────
+    async function submitNewReturn(e) {
+      e.preventDefault();
+
+      const type = document.getElementById('nr-type').value;
+      const refId = document.getElementById('nr-reference').value;
+      const refSel = document.getElementById('nr-reference');
+      const invoiceNumber = refSel.options[refSel.selectedIndex]?.dataset?.invoice || '';
+      const warehouseId = document.getElementById('nr-warehouse').value;
+      const returnDate = document.getElementById('nr-date').value;
+      const reason = document.getElementById('nr-reason').value.trim();
+      const refundAmount = parseFloat(document.getElementById('nr-refund').value) || 0;
+
+      // Collect items
+      const itemRows = document.querySelectorAll('#items-tbody tr');
+      const items = [];
+      let valid = true;
+
+      itemRows.forEach(row => {
+        const productSel = row.querySelector('.item-product');
+        const qtyInput = row.querySelector('.item-qty');
+        const priceInput = row.querySelector('.item-price');
+
+        const productId = parseInt(productSel?.value, 10);
+        const qty = parseInt(qtyInput?.value, 10);
+        const price = parseFloat(priceInput?.value) || 0;
+
+        if (!productId || qty < 1) { valid = false; return; }
+        items.push({ product_id: productId, quantity: qty, unit_price: price });
+      });
+
+      if (!valid || !items.length) {
+        Toast.error('Please add at least one valid item with a selected product and quantity ≥ 1.');
+        return;
+      }
+
+      if (!warehouseId) {
+        Toast.error('Please select a warehouse.');
+        return;
+      }
+
+      const payload = {
+        return_type: type,
+        reference_id: refId ? parseInt(refId, 10) : undefined,
+        invoice_number: invoiceNumber,
+        warehouse_id: parseInt(warehouseId, 10),
+        items,
+        refund_amount: refundAmount,
+        reason,
+        return_date: returnDate
+      };
+
+      const btn = document.getElementById('submit-return-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting…';
+
+      try {
+        await API.post('/returns', payload);
+        Toast.success('Return submitted successfully!');
+        closeNewReturnModal();
+        currentPage = 1;
+        await loadReturns();
+      } catch (err) {
+        Toast.error('Failed to submit return: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Return';
+      }
+    }
+
+    // ─── Close modals on backdrop click ─────────────────────────
+    document.getElementById('view-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeViewModal();
+    });
+    document.getElementById('new-return-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeNewReturnModal();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payments Hub - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+
+    <!-- PAGE HEADER -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Payments Hub</h1>
+        <p class="text-xs text-slate-500 mt-1">Track all incoming and outgoing payments — customers, suppliers, and expenses</p>
+      </div>
+      <button id="record-payment-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center self-start sm:self-auto">
+        <i class="fa-solid fa-money-bill-transfer mr-2"></i> Record Payment
+      </button>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <!-- Total Payments -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex items-center gap-4">
+        <div class="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-circle-dollar-to-slot text-blue-600 text-lg"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Payments</p>
+          <p id="stat-total" class="text-xl font-black text-slate-900 mt-0.5 truncate">$0.00</p>
+        </div>
+      </div>
+      <!-- Customer Payments -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex items-center gap-4">
+        <div class="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-users text-emerald-600 text-lg"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Customer Payments</p>
+          <p id="stat-customers" class="text-xl font-black text-slate-900 mt-0.5 truncate">$0.00</p>
+        </div>
+      </div>
+      <!-- Supplier Payments -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex items-center gap-4">
+        <div class="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-truck text-amber-600 text-lg"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Supplier Payments</p>
+          <p id="stat-suppliers" class="text-xl font-black text-slate-900 mt-0.5 truncate">$0.00</p>
+        </div>
+      </div>
+      <!-- Cash Payments -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex items-center gap-4">
+        <div class="w-11 h-11 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-hand-holding-dollar text-violet-600 text-lg"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Cash Payments</p>
+          <p id="stat-cash" class="text-xl font-black text-slate-900 mt-0.5 truncate">$0.00</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FILTER BAR -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <!-- Search -->
+        <div class="relative lg:col-span-2">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" id="search-input" placeholder="Search ref # or party name..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <!-- Payment Type -->
+        <select id="filter-payment-type" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Payment Types</option>
+          <option value="Customer Sale">Customer Sale</option>
+          <option value="Customer Debt">Customer Debt</option>
+          <option value="Supplier Purchase">Supplier Purchase</option>
+          <option value="Supplier Debt">Supplier Debt</option>
+          <option value="Expense">Expense</option>
+        </select>
+        <!-- Party Type -->
+        <select id="filter-party-type" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Party Types</option>
+          <option value="Customer">Customer</option>
+          <option value="Supplier">Supplier</option>
+          <option value="Expense">Expense</option>
+          <option value="Other">Other</option>
+        </select>
+        <!-- Payment Method -->
+        <select id="filter-method" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Methods</option>
+          <option value="Cash">Cash</option>
+          <option value="Bank">Bank</option>
+          <option value="Mobile Money">Mobile Money</option>
+          <option value="Other">Other</option>
+        </select>
+        <!-- Date Range -->
+        <div class="flex items-center gap-1 lg:col-span-1">
+          <input type="date" id="filter-start-date" class="w-full px-2 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" title="Start Date" />
+          <span class="text-slate-300 text-xs">–</span>
+          <input type="date" id="filter-end-date" class="w-full px-2 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" title="End Date" />
+        </div>
+      </div>
+    </div>
+
+    <!-- PAYMENTS TABLE -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+            <tr>
+              <th class="px-5 py-3.5">Ref #</th>
+              <th class="px-4 py-3.5">Type</th>
+              <th class="px-4 py-3.5">Party</th>
+              <th class="px-4 py-3.5">Amount</th>
+              <th class="px-4 py-3.5">Method</th>
+              <th class="px-4 py-3.5">Date</th>
+              <th class="px-4 py-3.5">Notes</th>
+              <th class="px-4 py-3.5">By</th>
+            </tr>
+          </thead>
+          <tbody id="payments-tbody" class="divide-y divide-slate-100">
+            <tr><td colspan="8" class="px-5 py-10 text-center text-slate-400">Loading payment records...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- PAGINATION -->
+      <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <div id="pagination-info">Showing 0 payments</div>
+        <div class="flex items-center space-x-1">
+          <button id="prev-page-btn" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition" disabled>
+            <i class="fa-solid fa-chevron-left mr-1"></i>Previous
+          </button>
+          <span id="current-page-num" class="px-3 py-1.5 font-bold text-slate-700 bg-slate-100 rounded-lg">1</span>
+          <button id="next-page-btn" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition" disabled>
+            Next<i class="fa-solid fa-chevron-right ml-1"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end #app-layout -->
+
+  <!-- RECORD PAYMENT MODAL -->
+  <div id="payment-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 my-8">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Record Payment</h3>
+          <p class="text-[11px] text-slate-500 mt-0.5">Log an incoming or outgoing payment transaction</p>
+        </div>
+        <button id="close-modal-btn" class="text-slate-400 hover:text-slate-600 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Form -->
+      <form id="payment-form" class="mt-5 space-y-4">
+
+        <!-- Payment Type -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Payment Type <span class="text-rose-500">*</span></label>
+            <select id="modal-payment-type" required class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white focus:outline-none">
+              <option value="">Select type...</option>
+              <option value="Customer Sale">Customer Sale</option>
+              <option value="Customer Debt">Customer Debt</option>
+              <option value="Supplier Purchase">Supplier Purchase</option>
+              <option value="Supplier Debt">Supplier Debt</option>
+              <option value="Expense">Expense</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Party Type <span class="text-rose-500">*</span></label>
+            <select id="modal-party-type" required class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white focus:outline-none">
+              <option value="">Select party type...</option>
+              <option value="Customer">Customer</option>
+              <option value="Supplier">Supplier</option>
+              <option value="Expense">Expense</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Dynamic Party Selection -->
+        <div id="party-customer-wrap" class="hidden">
+          <label class="block text-xs font-bold text-slate-700 mb-1">Customer <span class="text-rose-500">*</span></label>
+          <select id="modal-customer-select" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white focus:outline-none">
+            <option value="">Select customer...</option>
+          </select>
+        </div>
+
+        <div id="party-supplier-wrap" class="hidden">
+          <label class="block text-xs font-bold text-slate-700 mb-1">Supplier <span class="text-rose-500">*</span></label>
+          <select id="modal-supplier-select" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white focus:outline-none">
+            <option value="">Select supplier...</option>
+          </select>
+        </div>
+
+        <div id="party-other-wrap" class="hidden">
+          <label class="block text-xs font-bold text-slate-700 mb-1">Party Name <span class="text-rose-500">*</span></label>
+          <input type="text" id="modal-party-name-input" placeholder="Enter party / expense name..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+
+        <!-- Amount + Method -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Amount ($) <span class="text-rose-500">*</span></label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">$</span>
+              <input type="number" id="modal-amount" step="0.01" min="0.01" required placeholder="0.00" class="w-full pl-7 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Payment Method <span class="text-rose-500">*</span></label>
+            <select id="modal-method" required class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white focus:outline-none">
+              <option value="">Select method...</option>
+              <option value="Cash">Cash</option>
+              <option value="Bank">Bank</option>
+              <option value="Mobile Money">Mobile Money</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Payment Date -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Payment Date <span class="text-rose-500">*</span></label>
+          <input type="date" id="modal-date" required class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+
+        <!-- Notes -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Notes</label>
+          <textarea id="modal-notes" rows="2" placeholder="Optional notes or reference..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"></textarea>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+          <button type="button" id="cancel-modal-btn" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition">Cancel</button>
+          <button type="submit" id="submit-payment-btn" class="px-6 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition flex items-center gap-2">
+            <i class="fa-solid fa-check"></i> Save Payment
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('payments');
+
+    // ─── State ────────────────────────────────────────────────────────────────
+    let currentPage = 1;
+    const LIMIT = 20;
+    let cachedCustomers = [];
+    let cachedSuppliers = [];
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+    function fmt(val) {
+      const n = parseFloat(val) || 0;
+      return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '—';
+      return dateStr.slice(0, 10);
+    }
+
+    function methodBadge(method) {
+      const map = {
+        'Cash':         { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'fa-money-bill-wave' },
+        'Bank':         { cls: 'bg-blue-50 text-blue-700 border-blue-200',           icon: 'fa-building-columns' },
+        'Mobile Money': { cls: 'bg-purple-50 text-purple-700 border-purple-200',     icon: 'fa-mobile-screen-button' },
+        'Other':        { cls: 'bg-slate-100 text-slate-600 border-slate-200',       icon: 'fa-ellipsis' }
+      };
+      const m = map[method] || map['Other'];
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${m.cls}"><i class="fa-solid ${m.icon} text-[9px]"></i>${method || '—'}</span>`;
+    }
+
+    // ─── Load Stats Cards ─────────────────────────────────────────────────────
+    async function loadStats() {
+      try {
+        const [allRes, custRes, supRes, cashRes] = await Promise.all([
+          API.get('/payments', { limit: 1 }),
+          API.get('/payments', { party_type: 'Customer', limit: 1 }),
+          API.get('/payments', { party_type: 'Supplier', limit: 1 }),
+          API.get('/payments', { payment_method: 'Cash', limit: 1 })
+        ]);
+
+        document.getElementById('stat-total').textContent     = fmt(allRes.data?.total_amount  || 0);
+        document.getElementById('stat-customers').textContent = fmt(custRes.data?.total_amount || 0);
+        document.getElementById('stat-suppliers').textContent = fmt(supRes.data?.total_amount  || 0);
+        document.getElementById('stat-cash').textContent      = fmt(cashRes.data?.total_amount || 0);
+      } catch (err) {
+        console.error('Stats load error:', err);
+      }
+    }
+
+    // ─── Load Payments Table ──────────────────────────────────────────────────
+    async function loadPayments(page = 1) {
+      currentPage = page;
+
+      const params = {
+        page,
+        limit: LIMIT,
+        search:         document.getElementById('search-input').value.trim(),
+        payment_type:   document.getElementById('filter-payment-type').value,
+        party_type:     document.getElementById('filter-party-type').value,
+        payment_method: document.getElementById('filter-method').value,
+        start_date:     document.getElementById('filter-start-date').value,
+        end_date:       document.getElementById('filter-end-date').value
+      };
+
+      const tbody = document.getElementById('payments-tbody');
+      tbody.innerHTML = '<tr><td colspan="8" class="px-5 py-10 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading...</td></tr>';
+
+      try {
+        const res = await API.get('/payments', params);
+        const { payments, pagination, total_amount } = res.data;
+
+        if (!payments || payments.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="px-5 py-10 text-center text-slate-400"><i class="fa-solid fa-inbox text-2xl block mb-2"></i>No payment records found.</td></tr>';
+          updatePagination({ total: 0, page: 1, total_pages: 1 });
+          return;
+        }
+
+        tbody.innerHTML = payments.map(p => {
+          const notesText = p.notes ? `<span class="text-slate-500 truncate max-w-[120px] block" title="${p.notes}">${p.notes}</span>` : '<span class="text-slate-300">—</span>';
+          const byText = p.created_by_name ? `<span class="text-slate-600">${p.created_by_name}</span>` : '<span class="text-slate-300">—</span>';
+          const partyText = p.party_name
+            ? `<div class="font-medium text-slate-800">${p.party_name}</div><div class="text-[10px] text-slate-400">${p.party_type || ''}</div>`
+            : `<span class="text-slate-300">—</span>`;
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="px-5 py-3.5">
+                <span class="font-mono font-bold text-slate-800 text-[11px]">${p.reference_number || '—'}</span>
+              </td>
+              <td class="px-4 py-3.5">
+                <span class="text-slate-700 font-medium">${p.payment_type || '—'}</span>
+              </td>
+              <td class="px-4 py-3.5">${partyText}</td>
+              <td class="px-4 py-3.5">
+                <span class="font-bold text-emerald-600 text-sm">${fmt(p.amount)}</span>
+              </td>
+              <td class="px-4 py-3.5">${methodBadge(p.payment_method)}</td>
+              <td class="px-4 py-3.5 text-slate-500 whitespace-nowrap">${formatDate(p.payment_date)}</td>
+              <td class="px-4 py-3.5 max-w-[140px]">${notesText}</td>
+              <td class="px-4 py-3.5">${byText}</td>
+            </tr>
+          `;
+        }).join('');
+
+        updatePagination(pagination);
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="px-5 py-10 text-center text-rose-400"><i class="fa-solid fa-triangle-exclamation mr-2"></i>${err.message || 'Failed to load payments.'}</td></tr>`;
+        Toast.error(err.message || 'Failed to load payments.');
+      }
+    }
+
+    function updatePagination(pagination) {
+      const { total = 0, page = 1, total_pages = 1 } = pagination || {};
+      document.getElementById('pagination-info').textContent = `Showing page ${page} of ${total_pages} (${total} total payments)`;
+      document.getElementById('current-page-num').textContent = page;
+      document.getElementById('prev-page-btn').disabled = page <= 1;
+      document.getElementById('next-page-btn').disabled = page >= total_pages;
+    }
+
+    // ─── Load Party Dropdowns ─────────────────────────────────────────────────
+    async function loadPartyOptions() {
+      try {
+        const [custRes, supRes] = await Promise.all([
+          API.get('/customers'),
+          API.get('/suppliers')
+        ]);
+
+        cachedCustomers = custRes.data || custRes || [];
+        cachedSuppliers = supRes.data || supRes || [];
+
+        const custSel = document.getElementById('modal-customer-select');
+        custSel.innerHTML = '<option value="">Select customer...</option>' +
+          cachedCustomers.map(c => `<option value="${c.id}" data-name="${c.name}">${c.name}${c.balance !== undefined ? ` (Bal: ${fmt(c.balance)})` : ''}</option>`).join('');
+
+        const supSel = document.getElementById('modal-supplier-select');
+        supSel.innerHTML = '<option value="">Select supplier...</option>' +
+          cachedSuppliers.map(s => `<option value="${s.id}" data-name="${s.name}">${s.name}${s.balance !== undefined ? ` (Bal: ${fmt(s.balance)})` : ''}</option>`).join('');
+
+      } catch (err) {
+        console.error('Party load error:', err);
+      }
+    }
+
+    // ─── Modal Logic ──────────────────────────────────────────────────────────
+    const paymentModal   = document.getElementById('payment-modal');
+    const paymentForm    = document.getElementById('payment-form');
+    const partyTypeEl    = document.getElementById('modal-party-type');
+    const custWrap       = document.getElementById('party-customer-wrap');
+    const supWrap        = document.getElementById('party-supplier-wrap');
+    const otherWrap      = document.getElementById('party-other-wrap');
+
+    function openModal() {
+      paymentForm.reset();
+      document.getElementById('modal-date').value = new Date().toISOString().slice(0, 10);
+      custWrap.classList.add('hidden');
+      supWrap.classList.add('hidden');
+      otherWrap.classList.add('hidden');
+      paymentModal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      paymentModal.classList.add('hidden');
+    }
+
+    // Show/hide party input based on party_type selection
+    partyTypeEl.addEventListener('change', () => {
+      const val = partyTypeEl.value;
+      custWrap.classList.toggle('hidden', val !== 'Customer');
+      supWrap.classList.toggle('hidden', val !== 'Supplier');
+      otherWrap.classList.toggle('hidden', val !== 'Expense' && val !== 'Other');
+
+      // Reset selections
+      document.getElementById('modal-customer-select').value = '';
+      document.getElementById('modal-supplier-select').value = '';
+      document.getElementById('modal-party-name-input').value = '';
+    });
+
+    document.getElementById('record-payment-btn').addEventListener('click', openModal);
+    document.getElementById('close-modal-btn').addEventListener('click', closeModal);
+    document.getElementById('cancel-modal-btn').addEventListener('click', closeModal);
+
+    // Close on backdrop click
+    paymentModal.addEventListener('click', (e) => {
+      if (e.target === paymentModal) closeModal();
+    });
+
+    // ─── Form Submission ──────────────────────────────────────────────────────
+    paymentForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const partyType = partyTypeEl.value;
+      let partyId   = null;
+      let partyName = '';
+
+      if (partyType === 'Customer') {
+        const sel = document.getElementById('modal-customer-select');
+        partyId = sel.value ? parseInt(sel.value, 10) : null;
+        const opt = sel.options[sel.selectedIndex];
+        partyName = opt ? (opt.getAttribute('data-name') || opt.text) : '';
+        if (!partyId) { Toast.error('Please select a customer.'); return; }
+
+      } else if (partyType === 'Supplier') {
+        const sel = document.getElementById('modal-supplier-select');
+        partyId = sel.value ? parseInt(sel.value, 10) : null;
+        const opt = sel.options[sel.selectedIndex];
+        partyName = opt ? (opt.getAttribute('data-name') || opt.text) : '';
+        if (!partyId) { Toast.error('Please select a supplier.'); return; }
+
+      } else {
+        partyName = document.getElementById('modal-party-name-input').value.trim();
+        if (!partyName) { Toast.error('Please enter a party name.'); return; }
+      }
+
+      const amount = parseFloat(document.getElementById('modal-amount').value);
+      if (!amount || amount <= 0) { Toast.error('Please enter a valid amount.'); return; }
+
+      const payload = {
+        payment_type:   document.getElementById('modal-payment-type').value,
+        party_type:     partyType,
+        party_id:       partyId,
+        party_name:     partyName,
+        amount,
+        payment_method: document.getElementById('modal-method').value,
+        payment_date:   document.getElementById('modal-date').value,
+        notes:          document.getElementById('modal-notes').value.trim()
+      };
+
+      const btn = document.getElementById('submit-payment-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+
+      try {
+        await API.post('/payments', payload);
+        Toast.success('Payment recorded successfully!');
+        closeModal();
+        loadStats();
+        loadPayments(1);
+      } catch (err) {
+        Toast.error(err.message || 'Failed to record payment.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Save Payment';
+      }
+    });
+
+    // ─── Filter Listeners ─────────────────────────────────────────────────────
+    ['search-input', 'filter-payment-type', 'filter-party-type', 'filter-method', 'filter-start-date', 'filter-end-date'].forEach(id => {
+      const el = document.getElementById(id);
+      const evt = (id === 'search-input') ? 'input' : 'change';
+      el.addEventListener(evt, () => loadPayments(1));
+    });
+
+    // ─── Pagination Buttons ───────────────────────────────────────────────────
+    document.getElementById('prev-page-btn').addEventListener('click', () => {
+      if (currentPage > 1) loadPayments(currentPage - 1);
+    });
+    document.getElementById('next-page-btn').addEventListener('click', () => {
+      loadPayments(currentPage + 1);
+    });
+
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadPartyOptions();
+      await loadStats();
+      loadPayments(1);
+    });
+  </script>
+</body>
+</html>

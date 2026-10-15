@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock Transfers - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+    
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Warehouse Transfers</h1>
+        <p class="text-xs text-slate-500 mt-1">Inter-facility inventory movement and dispatch approvals</p>
+      </div>
+      <button id="new-transfer-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center self-start sm:self-auto">
+        <i class="fa-solid fa-truck-ramp-box mr-2"></i> New Stock Transfer
+      </button>
+    </div>
+
+    <!-- TABLE -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+            <tr>
+              <th class="px-5 py-3.5">Transfer #</th>
+              <th class="px-4 py-3.5">Source Facility</th>
+              <th class="px-4 py-3.5">Destination Facility</th>
+              <th class="px-4 py-3.5">Transfer Date</th>
+              <th class="px-4 py-3.5">Total Units</th>
+              <th class="px-4 py-3.5">Status</th>
+              <th class="px-5 py-3.5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="transfers-tbody" class="divide-y divide-slate-100">
+            <tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">Loading transfers...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- NEW TRANSFER MODAL -->
+  <div id="transfer-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 class="text-base font-bold text-slate-900">Initiate Warehouse Stock Transfer</h3>
+        <button onclick="closeTransferModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="transfer-form" class="mt-4 space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Source Warehouse (From) <span class="text-rose-500">*</span></label>
+            <select id="tr-source" required class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Destination Warehouse (To) <span class="text-rose-500">*</span></label>
+            <select id="tr-dest" required class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Transfer Date</label>
+          <input type="date" id="tr-date" required class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        <!-- Items Table -->
+        <div class="border border-slate-200 rounded-xl overflow-hidden mt-2">
+          <div class="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 uppercase">Items to Transfer</span>
+            <button type="button" onclick="addTransferRow()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg transition">
+              <i class="fa-solid fa-plus mr-1"></i> Add Product
+            </button>
+          </div>
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-100 text-slate-500 uppercase font-semibold">
+              <tr>
+                <th class="px-3 py-2">Product</th>
+                <th class="px-3 py-2 w-28">Quantity</th>
+                <th class="px-3 py-2 w-12 text-center"></th>
+              </tr>
+            </thead>
+            <tbody id="tr-items-tbody" class="divide-y divide-slate-100">
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Notes / Dispatch Instructions</label>
+          <textarea id="tr-notes" rows="2" placeholder="Driver name, vehicle registration..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+        </div>
+
+        <div class="flex items-center space-x-2 pt-1">
+          <input type="checkbox" id="tr-complete-now" class="w-4 h-4 rounded text-blue-600 border-slate-300" />
+          <label for="tr-complete-now" class="text-xs font-semibold text-slate-700 cursor-pointer">Immediately Complete & Move Stock (Skip Pending state)</label>
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeTransferModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
+          <button type="submit" id="submit-tr-btn" class="px-6 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm">Submit Transfer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('transfers');
+
+    let cachedWarehouses = [];
+    let cachedProducts = [];
+
+    async function initOptions() {
+      try {
+        const [whRes, prodRes] = await Promise.all([
+          API.get('/warehouses'),
+          API.get('/products', { limit: 100 })
+        ]);
+        cachedWarehouses = whRes.data || [];
+        cachedProducts = prodRes.data.products || [];
+
+        const whOptions = cachedWarehouses.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+        document.getElementById('tr-source').innerHTML = whOptions;
+        document.getElementById('tr-dest').innerHTML = whOptions;
+        if (cachedWarehouses.length > 1) {
+          document.getElementById('tr-dest').selectedIndex = 1;
+        }
+      } catch (e) {}
+    }
+
+    async function loadTransfers() {
+      try {
+        const res = await API.get('/transfers');
+        const list = res.data.transfers || [];
+        const tbody = document.getElementById('transfers-tbody');
+
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">No stock transfers on record.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = list.map(t => {
+          const statusColors = {
+            'Completed': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            'Pending': 'bg-amber-50 text-amber-700 border-amber-200',
+            'Approved': 'bg-blue-50 text-blue-700 border-blue-200',
+            'Cancelled': 'bg-rose-50 text-rose-700 border-rose-200'
+          };
+          const badgeClass = statusColors[t.status] || 'bg-slate-100 text-slate-700';
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="px-5 py-3.5 font-bold text-slate-900">${t.transfer_number}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-800">${t.source_warehouse_name}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-800">${t.destination_warehouse_name}</td>
+              <td class="px-4 py-3.5 text-slate-500">${t.transfer_date.slice(0, 10)}</td>
+              <td class="px-4 py-3.5 font-black text-slate-900">${t.total_units} units</td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}">${t.status}</span></td>
+              <td class="px-5 py-3.5 text-right space-x-2">
+                ${t.status === 'Pending' ? `
+                  <button onclick="updateTransferStatus(${t.id}, 'Completed')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold">
+                    Mark Completed
+                  </button>
+                  <button onclick="updateTransferStatus(${t.id}, 'Cancelled')" class="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-xs font-bold">
+                    Cancel
+                  </button>
+                ` : `<span class="text-slate-400 text-xs italic">Archived</span>`}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    let trRowCounter = 0;
+    function addTransferRow() {
+      trRowCounter++;
+      const tbody = document.getElementById('tr-items-tbody');
+      const tr = document.createElement('tr');
+      tr.id = `tr-row-${trRowCounter}`;
+      tr.className = 'tr-row hover:bg-slate-50';
+
+      const prodOptions = cachedProducts.map(p => `<option value="${p.id}">${p.name} (${p.unit})</option>`).join('');
+
+      tr.innerHTML = `
+        <td class="px-3 py-2">
+          <select class="tr-prod-select w-full px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white">
+            ${prodOptions}
+          </select>
+        </td>
+        <td class="px-3 py-2">
+          <input type="number" min="1" value="1" class="tr-qty-input w-full px-2 py-1 text-xs border border-slate-200 rounded-lg" />
+        </td>
+        <td class="px-3 py-2 text-center">
+          <button type="button" onclick="document.getElementById('tr-row-${trRowCounter}').remove();" class="text-rose-500 hover:text-rose-700">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    const modal = document.getElementById('transfer-modal');
+    document.getElementById('new-transfer-btn').addEventListener('click', () => {
+      document.getElementById('transfer-form').reset();
+      document.getElementById('tr-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('tr-items-tbody').innerHTML = '';
+      addTransferRow();
+      modal.classList.remove('hidden');
+    });
+
+    function closeTransferModal() {
+      modal.classList.add('hidden');
+    }
+
+    document.getElementById('transfer-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const sourceId = document.getElementById('tr-source').value;
+      const destId = document.getElementById('tr-dest').value;
+
+      if (sourceId === destId) {
+        Toast.error('Source and destination warehouse cannot be identical.');
+        return;
+      }
+
+      const rows = document.querySelectorAll('.tr-row');
+      const items = [];
+      rows.forEach(r => {
+        const pId = r.querySelector('.tr-prod-select').value;
+        const qty = parseInt(r.querySelector('.tr-qty-input').value, 10);
+        if (pId && qty > 0) {
+          items.push({ product_id: parseInt(pId, 10), quantity: qty });
+        }
+      });
+
+      if (items.length === 0) {
+        Toast.error('Please specify at least one product to transfer.');
+        return;
+      }
+
+      const payload = {
+        source_warehouse_id: parseInt(sourceId, 10),
+        destination_warehouse_id: parseInt(destId, 10),
+        transfer_date: document.getElementById('tr-date').value,
+        items,
+        notes: document.getElementById('tr-notes').value.trim(),
+        auto_complete: document.getElementById('tr-complete-now').checked
+      };
+
+      try {
+        await API.post('/transfers', payload);
+        Toast.success('Transfer order submitted!');
+        closeTransferModal();
+        loadTransfers();
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    });
+
+    async function updateTransferStatus(id, status) {
+      if (!confirm(`Mark transfer as ${status}?`)) return;
+      try {
+        await API.put(`/transfers/${id}/status`, { status });
+        Toast.success(`Transfer marked as ${status}`);
+        loadTransfers();
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await initOptions();
+      loadTransfers();
+    });
+  </script>
+</body>
+</html>

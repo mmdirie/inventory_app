@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product Management - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+    
+    <!-- HEADER -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Products Catalog</h1>
+        <p class="text-xs text-slate-500 mt-1">Manage SKUs, barcodes, pricing, and stock tracking</p>
+      </div>
+      <div class="flex items-center space-x-3">
+        <a href="/barcode/index.html" class="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-xl transition flex items-center">
+          <i class="fa-solid fa-barcode mr-2 text-slate-500"></i> Barcode Labels
+        </a>
+        <button id="add-product-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center">
+          <i class="fa-solid fa-plus mr-2"></i> Add Product
+        </button>
+      </div>
+    </div>
+
+    <!-- FILTERS BAR -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+        <!-- Search -->
+        <div class="md:col-span-2 relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="Search by name, SKU, or barcode..." 
+            class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <!-- Category filter -->
+        <div>
+          <select id="category-filter" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="">All Categories</option>
+          </select>
+        </div>
+
+        <!-- Warehouse filter -->
+        <div>
+          <select id="warehouse-filter" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="">All Warehouses</option>
+          </select>
+        </div>
+
+        <!-- Low Stock Filter Toggle -->
+        <div>
+          <select id="status-filter" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="">All Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="inactive">Inactive</option>
+            <option value="low_stock">Low Stock Only</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRODUCTS TABLE -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+            <tr>
+              <th class="px-5 py-3.5">Product & SKU</th>
+              <th class="px-4 py-3.5">Barcode</th>
+              <th class="px-4 py-3.5">Category</th>
+              <th class="px-4 py-3.5">Cost Price</th>
+              <th class="px-4 py-3.5">Selling Price</th>
+              <th class="px-4 py-3.5">Stock In-Hand</th>
+              <th class="px-4 py-3.5">Status</th>
+              <th class="px-5 py-3.5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="products-tbody" class="divide-y divide-slate-100">
+            <tr><td colspan="8" class="px-5 py-8 text-center text-slate-400">Loading products...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- PAGINATION -->
+      <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <div id="pagination-info">Showing 0 of 0 products</div>
+        <div class="flex items-center space-x-2">
+          <button id="prev-page-btn" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
+          <span id="current-page-num" class="font-bold text-slate-700">1</span>
+          <button id="next-page-btn" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ADD / EDIT PRODUCT MODAL -->
+  <div id="product-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="modal-title" class="text-base font-bold text-slate-900">Add New Product</h3>
+        <button onclick="closeProductModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="product-form" class="mt-4 space-y-4">
+        <input type="hidden" id="prod-id" />
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- SKU -->
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">SKU <span class="text-rose-500">*</span></label>
+            <input type="text" id="prod-sku" required placeholder="SKU-XXX-001" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+
+          <!-- Barcode with Generate Button -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-xs font-bold text-slate-700">Barcode <span class="text-rose-500">*</span></label>
+              <button type="button" onclick="generateBarcodeCandidate()" class="text-[11px] text-blue-600 hover:underline">Auto Generate</button>
+            </div>
+            <input type="text" id="prod-barcode" required placeholder="890123450000" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+        </div>
+
+        <!-- Name -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Product Name <span class="text-rose-500">*</span></label>
+          <input type="text" id="prod-name" required placeholder="Dell Latitude 5540 15.6 Inch Laptop" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Description</label>
+          <textarea id="prod-desc" rows="2" placeholder="Full technical specifications or notes..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+        </div>
+
+        <!-- Category, Brand, Supplier -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Category</label>
+            <select id="prod-category" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">None</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Brand</label>
+            <select id="prod-brand" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">None</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Supplier</label>
+            <select id="prod-supplier" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">None</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Pricing (Purchase, Selling, Wholesale) -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Purchase Cost ($)</label>
+            <input type="number" step="0.01" id="prod-cost" required value="0" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Selling Retail ($) <span class="text-rose-500">*</span></label>
+            <input type="number" step="0.01" id="prod-price" required value="0" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Wholesale Price ($)</label>
+            <input type="number" step="0.01" id="prod-wholesale" value="0" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+        </div>
+
+        <!-- Stock Settings -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Min Stock Alert Level</label>
+            <input type="number" id="prod-min-stock" value="5" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Unit</label>
+            <input type="text" id="prod-unit" value="pcs" placeholder="pcs, boxes, units" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div id="initial-stock-group">
+            <label class="block text-xs font-bold text-slate-700 mb-1">Initial Opening Stock</label>
+            <input type="number" id="prod-initial-stock" value="0" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+        </div>
+
+        <!-- Warehouse & Status -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Primary Warehouse</label>
+            <select id="prod-warehouse" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Status</label>
+            <select id="prod-status" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeProductModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
+          <button type="submit" id="save-prod-btn" class="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm">Save Product</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- VIEW PRODUCT DETAILS & BARCODE MODAL -->
+  <div id="details-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 my-8">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 class="text-base font-bold text-slate-900">Product Inspection</h3>
+        <button onclick="closeDetailsModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div id="details-body" class="mt-4 space-y-4">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('products');
+
+    let currentPage = 1;
+    const limit = 15;
+    let cachedCategories = [];
+    let cachedBrands = [];
+    let cachedSuppliers = [];
+    let cachedWarehouses = [];
+
+    // Filter elements
+    const searchInput = document.getElementById('search-input');
+    const categoryFilter = document.getElementById('category-filter');
+    const warehouseFilter = document.getElementById('warehouse-filter');
+    const statusFilter = document.getElementById('status-filter');
+
+    async function loadSelectOptions() {
+      try {
+        const [cats, brands, sups, whs] = await Promise.all([
+          API.get('/categories'),
+          API.get('/brands'),
+          API.get('/suppliers'),
+          API.get('/warehouses')
+        ]);
+
+        cachedCategories = cats.data || [];
+        cachedBrands = brands.data || [];
+        cachedSuppliers = sups.data || [];
+        cachedWarehouses = whs.data || [];
+
+        // Fill filter dropdowns
+        categoryFilter.innerHTML = '<option value="">All Categories</option>' + 
+          cachedCategories.map(c => `<option value="${UI.escape(c.id)}">${UI.escape(c.name)}</option>`).join('');
+
+        warehouseFilter.innerHTML = '<option value="">All Warehouses</option>' + 
+          cachedWarehouses.map(w => `<option value="${UI.escape(w.id)}">${UI.escape(w.name)}</option>`).join('');
+
+        // Fill modal dropdowns
+        document.getElementById('prod-category').innerHTML = '<option value="">None</option>' + 
+          cachedCategories.map(c => `<option value="${UI.escape(c.id)}">${UI.escape(c.name)}</option>`).join('');
+
+        document.getElementById('prod-brand').innerHTML = '<option value="">None</option>' + 
+          cachedBrands.map(b => `<option value="${UI.escape(b.id)}">${UI.escape(b.name)}</option>`).join('');
+
+        document.getElementById('prod-supplier').innerHTML = '<option value="">None</option>' + 
+          cachedSuppliers.map(s => `<option value="${UI.escape(s.id)}">${UI.escape(s.name)}</option>`).join('');
+
+        document.getElementById('prod-warehouse').innerHTML = 
+          cachedWarehouses.map(w => `<option value="${UI.escape(w.id)}" ${w.is_default ? 'selected' : ''}>${UI.escape(w.name)} ${w.is_default ? '(Default)' : ''}</option>`).join('');
+
+      } catch (err) {
+        console.error('Failed to load filter options:', err);
+      }
+    }
+
+    async function loadProducts(page = 1) {
+      currentPage = page;
+      const params = {
+        page,
+        limit,
+        search: searchInput.value.trim(),
+        category_id: categoryFilter.value,
+        warehouse_id: warehouseFilter.value
+      };
+
+      const statusVal = statusFilter.value;
+      if (statusVal === 'low_stock') {
+        params.low_stock = 'true';
+      } else if (statusVal) {
+        params.status = statusVal;
+      }
+
+      try {
+        const res = await API.get('/products', params);
+        const { products, pagination } = res.data;
+
+        const tbody = document.getElementById('products-tbody');
+        if (products.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="px-5 py-8 text-center text-slate-400">No products match your search criteria.</td></tr>';
+        } else {
+          tbody.innerHTML = products.map(p => {
+            const isLow = p.current_stock <= p.min_stock_level;
+            const statusClass = p.status === 'active' 
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+              : 'bg-slate-100 text-slate-600 border-slate-200';
+
+            const stockBadge = isLow 
+              ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200 animate-pulse"><i class="fa-solid fa-triangle-exclamation mr-1"></i>${UI.escape(p.current_stock)} ${UI.escape(p.unit)} (Low)</span>`
+              : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-800">${UI.escape(p.current_stock)} ${UI.escape(p.unit)}</span>`;
+
+            return `
+              <tr class="hover:bg-slate-50/80 transition">
+                <td class="px-5 py-3.5">
+                  <div class="font-bold text-slate-900">${UI.escape(p.name)}</div>
+                  <div class="text-[11px] text-slate-400 font-mono">SKU: ${UI.escape(p.sku)}</div>
+                </td>
+                <td class="px-4 py-3.5 font-mono text-slate-600">${UI.escape(p.barcode)}</td>
+                <td class="px-4 py-3.5 text-slate-600">${UI.escape(p.category_name || '-')}</td>
+                <td class="px-4 py-3.5 text-slate-500">${Auth.formatMoney(p.purchase_price)}</td>
+                <td class="px-4 py-3.5 font-bold text-slate-900">${Auth.formatMoney(p.selling_price)}</td>
+                <td class="px-4 py-3.5">${stockBadge}</td>
+                <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${UI.escape(p.status)}</span></td>
+                <td class="px-5 py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                  <button onclick="viewProductDetails(${p.id})" title="Details & Barcode" class="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition">
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                  <button onclick="editProduct(${p.id})" title="Edit" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </button>
+                  <button data-name="${UI.escape(p.name)}" onclick="deleteProduct(${p.id}, this.dataset.name)" title="Delete or Deactivate" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100 transition">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        // Pagination controls
+        document.getElementById('pagination-info').innerText = `Showing ${products.length} of ${pagination.total} products`;
+        document.getElementById('current-page-num').innerText = pagination.page;
+        document.getElementById('prev-page-btn').disabled = pagination.page <= 1;
+        document.getElementById('next-page-btn').disabled = pagination.page >= pagination.total_pages;
+
+      } catch (err) {
+        Toast.error('Error fetching products: ' + err.message);
+      }
+    }
+
+    // Modal controls
+    const modal = document.getElementById('product-modal');
+    const form = document.getElementById('product-form');
+
+    document.getElementById('add-product-btn').addEventListener('click', () => {
+      form.reset();
+      document.getElementById('prod-id').value = '';
+      document.getElementById('modal-title').innerText = 'Add New Product';
+      document.getElementById('initial-stock-group').classList.remove('hidden');
+      generateBarcodeCandidate();
+      modal.classList.remove('hidden');
+    });
+
+    function closeProductModal() {
+      modal.classList.add('hidden');
+    }
+
+    async function generateBarcodeCandidate() {
+      try {
+        const res = await API.get('/barcode/generate-suggested');
+        document.getElementById('prod-barcode').value = res.data.barcode;
+      } catch (e) {
+        // Fallback random
+        document.getElementById('prod-barcode').value = '890' + Math.floor(100000000 + Math.random() * 900000000);
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('prod-id').value;
+      const payload = {
+        sku: document.getElementById('prod-sku').value.trim(),
+        barcode: document.getElementById('prod-barcode').value.trim(),
+        name: document.getElementById('prod-name').value.trim(),
+        description: document.getElementById('prod-desc').value.trim(),
+        category_id: document.getElementById('prod-category').value || null,
+        brand_id: document.getElementById('prod-brand').value || null,
+        supplier_id: document.getElementById('prod-supplier').value || null,
+        purchase_price: parseFloat(document.getElementById('prod-cost').value) || 0,
+        selling_price: parseFloat(document.getElementById('prod-price').value) || 0,
+        wholesale_price: parseFloat(document.getElementById('prod-wholesale').value) || 0,
+        min_stock_level: parseInt(document.getElementById('prod-min-stock').value, 10) || 5,
+        unit: document.getElementById('prod-unit').value || 'pcs',
+        default_warehouse_id: document.getElementById('prod-warehouse').value || null,
+        status: document.getElementById('prod-status').value
+      };
+
+      if (!id) {
+        payload.initial_stock = parseInt(document.getElementById('prod-initial-stock').value, 10) || 0;
+      }
+
+      const saveBtn = document.getElementById('save-prod-btn');
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving...';
+
+      try {
+        if (id) {
+          await API.put(`/products/${id}`, payload);
+          Toast.success('Product updated successfully');
+        } else {
+          await API.post('/products', payload);
+          Toast.success('Product created successfully');
+        }
+        closeProductModal();
+        loadProducts(currentPage);
+      } catch (err) {
+        Toast.error(err.message);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save Product';
+      }
+    });
+
+    async function editProduct(id) {
+      try {
+        const res = await API.get(`/products/${id}`);
+        const p = res.data;
+
+        document.getElementById('prod-id').value = p.id;
+        document.getElementById('modal-title').innerText = `Edit: ${p.name}`;
+        document.getElementById('prod-sku').value = p.sku;
+        document.getElementById('prod-barcode').value = p.barcode;
+        document.getElementById('prod-name').value = p.name;
+        document.getElementById('prod-desc').value = p.description || '';
+        document.getElementById('prod-category').value = p.category_id || '';
+        document.getElementById('prod-brand').value = p.brand_id || '';
+        document.getElementById('prod-supplier').value = p.supplier_id || '';
+        document.getElementById('prod-cost').value = p.purchase_price;
+        document.getElementById('prod-price').value = p.selling_price;
+        document.getElementById('prod-wholesale').value = p.wholesale_price;
+        document.getElementById('prod-min-stock').value = p.min_stock_level;
+        document.getElementById('prod-unit').value = p.unit;
+        document.getElementById('prod-warehouse').value = p.default_warehouse_id || '';
+        document.getElementById('prod-status').value = p.status;
+
+        // Hide initial stock field on edit
+        document.getElementById('initial-stock-group').classList.add('hidden');
+
+        modal.classList.remove('hidden');
+      } catch (err) {
+        Toast.error('Failed to load product: ' + err.message);
+      }
+    }
+
+    async function deleteProduct(id, name) {
+      if (!confirm(`Are you sure you want to delete or deactivate "${name}"?`)) return;
+      try {
+        const res = await API.delete(`/products/${id}`);
+        Toast.success(res.message || 'Product removed');
+        loadProducts(currentPage);
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    // View Details Modal
+    const detailsModal = document.getElementById('details-modal');
+    function closeDetailsModal() {
+      detailsModal.classList.add('hidden');
+    }
+
+    async function viewProductDetails(id) {
+      try {
+        const res = await API.get(`/products/${id}`);
+        const p = res.data;
+
+        const body = document.getElementById('details-body');
+        body.innerHTML = `
+          <div class="text-center pb-4 border-b border-slate-100">
+            <svg id="detail-barcode-svg" class="mx-auto"></svg>
+            <div class="font-mono text-xs font-bold text-slate-700 mt-1">${UI.escape(p.barcode)}</div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-xs pt-2">
+            <div><span class="text-slate-400 block font-medium">SKU</span> <span class="font-bold text-slate-800">${UI.escape(p.sku)}</span></div>
+            <div><span class="text-slate-400 block font-medium">Category</span> <span class="font-bold text-slate-800">${UI.escape(p.category_name || 'N/A')}</span></div>
+            <div><span class="text-slate-400 block font-medium">Brand</span> <span class="font-bold text-slate-800">${UI.escape(p.brand_name || 'N/A')}</span></div>
+            <div><span class="text-slate-400 block font-medium">Supplier</span> <span class="font-bold text-slate-800">${UI.escape(p.supplier_name || 'N/A')}</span></div>
+            <div><span class="text-slate-400 block font-medium">Purchase Cost</span> <span class="font-bold text-slate-800">${Auth.formatMoney(p.purchase_price)}</span></div>
+            <div><span class="text-slate-400 block font-medium">Selling Price</span> <span class="font-bold text-emerald-600">${Auth.formatMoney(p.selling_price)}</span></div>
+            <div><span class="text-slate-400 block font-medium">Total Current Stock</span> <span class="font-black text-slate-900">${UI.escape(p.current_stock)} ${UI.escape(p.unit)}</span></div>
+            <div><span class="text-slate-400 block font-medium">Min Threshold</span> <span class="font-bold text-slate-800">${UI.escape(p.min_stock_level)} ${UI.escape(p.unit)}</span></div>
+          </div>
+
+          <div class="mt-4 pt-3 border-t border-slate-100">
+            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Warehouse Breakdown</h4>
+            <div class="space-y-1.5">
+              ${(p.warehouse_stock || []).map(ws => `
+                <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 text-xs">
+                  <span class="font-medium text-slate-700">${UI.escape(ws.warehouse_name)}</span>
+                  <span class="font-bold text-slate-900">${UI.escape(ws.quantity)} ${UI.escape(p.unit)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="pt-3 flex justify-end">
+            <button onclick="closeDetailsModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Close</button>
+          </div>
+        `;
+
+        detailsModal.classList.remove('hidden');
+
+        // Render Barcode
+        JsBarcode('#detail-barcode-svg', p.barcode, {
+          format: 'CODE128',
+          width: 1.8,
+          height: 48,
+          displayValue: false
+        });
+
+      } catch (err) {
+        Toast.error('Failed to load product details: ' + err.message);
+      }
+    }
+
+    // Debounce search input
+    let searchTimeout = null;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => loadProducts(1), 350);
+    });
+
+    categoryFilter.addEventListener('change', () => loadProducts(1));
+    warehouseFilter.addEventListener('change', () => loadProducts(1));
+    statusFilter.addEventListener('change', () => loadProducts(1));
+
+    document.getElementById('prev-page-btn').addEventListener('click', () => {
+      if (currentPage > 1) loadProducts(currentPage - 1);
+    });
+    document.getElementById('next-page-btn').addEventListener('click', () => {
+      loadProducts(currentPage + 1);
+    });
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadSelectOptions();
+      loadProducts(1);
+    });
+  </script>
+</body>
+</html>

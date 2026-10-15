@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Categories - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+    
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Product Categories</h1>
+        <p class="text-xs text-slate-500 mt-1">Organize products into hierarchical departments and groups</p>
+      </div>
+      <button id="add-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center self-start sm:self-auto">
+        <i class="fa-solid fa-plus mr-2"></i> Add Category
+      </button>
+    </div>
+
+    <!-- SEARCH & FILTER -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-6">
+      <div class="flex flex-col sm:flex-row gap-3">
+        <div class="flex-1 relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" id="search-input" placeholder="Search categories..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <select id="status-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+          <tr>
+            <th class="px-5 py-3.5">Category Name</th>
+            <th class="px-4 py-3.5">Description</th>
+            <th class="px-4 py-3.5">Assigned Products</th>
+            <th class="px-4 py-3.5">Status</th>
+            <th class="px-5 py-3.5 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="categories-tbody" class="divide-y divide-slate-100">
+          <tr><td colspan="5" class="px-5 py-8 text-center text-slate-400">Loading categories...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- MODAL -->
+  <div id="cat-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="modal-title" class="text-base font-bold text-slate-900">Add Category</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <form id="cat-form" class="mt-4 space-y-4">
+        <input type="hidden" id="cat-id" />
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Category Name <span class="text-rose-500">*</span></label>
+          <input type="text" id="cat-name" required placeholder="e.g. Computer Hardware" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Description</label>
+          <textarea id="cat-desc" rows="3" placeholder="Category purpose or scope..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Status</label>
+          <select id="cat-status" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
+          <button type="submit" class="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('categories');
+
+    async function loadCategories() {
+      const search = document.getElementById('search-input').value.trim();
+      const status = document.getElementById('status-filter').value;
+      try {
+        const res = await API.get('/categories', { search, status });
+        const categories = res.data;
+        const tbody = document.getElementById('categories-tbody');
+
+        if (categories.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-8 text-center text-slate-400">No categories found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = categories.map(c => `
+          <tr class="hover:bg-slate-50/80 transition">
+            <td class="px-5 py-3.5 font-bold text-slate-900">${c.name}</td>
+            <td class="px-4 py-3.5 text-slate-500 max-w-xs truncate">${c.description || '-'}</td>
+            <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">${c.product_count} products</span></td>
+            <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${c.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}">${c.status}</span></td>
+            <td class="px-5 py-3.5 text-right space-x-2">
+              <button onclick="editCat(${c.id}, '${c.name.replace(/'/g, "\\'")}', '${(c.description || '').replace(/'/g, "\\'")}', '${c.status}')" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button onclick="deleteCat(${c.id}, '${c.name.replace(/'/g, "\\'")}')" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    const modal = document.getElementById('cat-modal');
+    const form = document.getElementById('cat-form');
+
+    document.getElementById('add-btn').addEventListener('click', () => {
+      form.reset();
+      document.getElementById('cat-id').value = '';
+      document.getElementById('modal-title').innerText = 'Add Category';
+      modal.classList.remove('hidden');
+    });
+
+    function closeModal() {
+      modal.classList.add('hidden');
+    }
+
+    function editCat(id, name, desc, status) {
+      document.getElementById('cat-id').value = id;
+      document.getElementById('cat-name').value = name;
+      document.getElementById('cat-desc').value = desc;
+      document.getElementById('cat-status').value = status;
+      document.getElementById('modal-title').innerText = 'Edit Category';
+      modal.classList.remove('hidden');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('cat-id').value;
+      const payload = {
+        name: document.getElementById('cat-name').value.trim(),
+        description: document.getElementById('cat-desc').value.trim(),
+        status: document.getElementById('cat-status').value
+      };
+
+      try {
+        if (id) {
+          await API.put(`/categories/${id}`, payload);
+          Toast.success('Category updated');
+        } else {
+          await API.post('/categories', payload);
+          Toast.success('Category created');
+        }
+        closeModal();
+        loadCategories();
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    });
+
+    async function deleteCat(id, name) {
+      if (!confirm(`Delete category "${name}"?`)) return;
+      try {
+        await API.delete(`/categories/${id}`);
+        Toast.success('Category deleted');
+        loadCategories();
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    document.getElementById('search-input').addEventListener('input', () => loadCategories());
+    document.getElementById('status-filter').addEventListener('change', () => loadCategories());
+
+    document.addEventListener('DOMContentLoaded', loadCategories);
+  </script>
+</body>
+</html>

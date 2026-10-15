@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard - Apex Inventory Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+    
+    <!-- PAGE TITLE & HEADER -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Executive Dashboard</h1>
+        <p class="text-xs text-slate-500 mt-1">Real-time enterprise metrics for this organization</p>
+      </div>
+      <div class="flex items-center space-x-3">
+        <a href="/sales/index.html" class="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition">
+          <i class="fa-solid fa-cash-register mr-2"></i> Launch POS
+        </a>
+        <a href="/purchases/index.html" class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition">
+          <i class="fa-solid fa-cart-plus mr-2"></i> New Purchase
+        </a>
+      </div>
+    </div>
+
+    <!-- 1. PRIMARY FINANCIAL & REVENUE CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+      
+      <!-- Total Revenue -->
+      <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Sales Revenue</span>
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <i class="fa-solid fa-sack-dollar text-lg"></i>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div id="metric-revenue" class="text-2xl font-black text-slate-900">$0.00</div>
+          <div class="flex items-center mt-1 text-xs text-slate-500 space-x-1">
+            <span>Today:</span>
+            <span id="metric-today-sales" class="font-bold text-emerald-600">$0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Total Purchases -->
+      <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Purchases (Cost)</span>
+          <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <i class="fa-solid fa-truck-ramp-box text-lg"></i>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div id="metric-purchases" class="text-2xl font-black text-slate-900">$0.00</div>
+          <div class="flex items-center mt-1 text-xs text-slate-500 space-x-1">
+            <span>Today:</span>
+            <span id="metric-today-purchases" class="font-bold text-blue-600">$0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expenses & Margin -->
+      <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Operating Expenses</span>
+          <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+            <i class="fa-solid fa-money-bill-transfer text-lg"></i>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div id="metric-expenses" class="text-2xl font-black text-slate-900">$0.00</div>
+          <div class="flex items-center mt-1 text-xs text-slate-500 space-x-1">
+            <span>Net Operating Margin:</span>
+            <span id="metric-net-margin" class="font-bold text-slate-800">$0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stock Valuation -->
+      <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Stock Value</span>
+          <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <i class="fa-solid fa-boxes-stacked text-lg"></i>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div id="metric-stock-value" class="text-2xl font-black text-slate-900">$0.00</div>
+          <div class="flex items-center mt-1 text-xs text-slate-500 space-x-1">
+            <span id="metric-stock-units" class="font-bold text-slate-800">0</span>
+            <span>units across facilities</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 2. SECONDARY METRICS (Counts & Outstanding Debts) -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+      
+      <div class="bg-white p-4 rounded-xl border border-slate-200/80 text-center">
+        <div class="text-[11px] font-bold text-slate-400 uppercase">Products</div>
+        <div id="metric-count-products" class="text-xl font-black text-slate-900 mt-1">0</div>
+        <a href="/products/index.html" class="text-[11px] text-blue-600 hover:underline mt-1 block">View items</a>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200/80 text-center">
+        <div class="text-[11px] font-bold text-slate-400 uppercase">Categories</div>
+        <div id="metric-count-categories" class="text-xl font-black text-slate-900 mt-1">0</div>
+        <a href="/categories/index.html" class="text-[11px] text-blue-600 hover:underline mt-1 block">View groups</a>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200/80 text-center">
+        <div class="text-[11px] font-bold text-slate-400 uppercase">Customers</div>
+        <div id="metric-count-customers" class="text-xl font-black text-slate-900 mt-1">0</div>
+        <a href="/customers/index.html" class="text-[11px] text-blue-600 hover:underline mt-1 block">Directory</a>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200/80 text-center">
+        <div class="text-[11px] font-bold text-slate-400 uppercase">Suppliers</div>
+        <div id="metric-count-suppliers" class="text-xl font-black text-slate-900 mt-1">0</div>
+        <a href="/suppliers/index.html" class="text-[11px] text-blue-600 hover:underline mt-1 block">Vendors</a>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200/80 text-center">
+        <div class="text-[11px] font-bold text-slate-400 uppercase">Customer Debts</div>
+        <div id="metric-customer-debt" class="text-lg font-black text-rose-600 mt-1">$0.00</div>
+        <a href="/debts/index.html" class="text-[11px] text-rose-600 hover:underline mt-1 block">Receivables</a>
+      </div>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200/80 text-center">
+        <div class="text-[11px] font-bold text-slate-400 uppercase">Supplier Debts</div>
+        <div id="metric-supplier-debt" class="text-lg font-black text-amber-600 mt-1">$0.00</div>
+        <a href="/debts/index.html" class="text-[11px] text-amber-600 hover:underline mt-1 block">Payables</a>
+      </div>
+
+    </div>
+
+    <!-- 3. INTERACTIVE CHART & LOW STOCK ALERT SECTION -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      
+      <!-- Trend Chart (2 Cols) -->
+      <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Sales vs Purchases Trend (Last 7 Days)</h3>
+            <p class="text-xs text-slate-500">Daily business cashflow movement</p>
+          </div>
+          <span class="px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-600 rounded-lg">Realtime</span>
+        </div>
+        <div class="h-64">
+          <canvas id="salesChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Low Stock Alerts Widget (1 Col) -->
+      <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 flex items-center">
+              <span>Low Stock Alerts</span>
+              <span id="low-stock-count-pill" class="ml-2 px-2 py-0.5 text-xs font-bold rounded-full bg-rose-100 text-rose-600">0</span>
+            </h3>
+            <p class="text-xs text-slate-500">Products at or below reorder threshold</p>
+          </div>
+          <a href="/stock/index.html?low_stock=true" class="text-xs font-semibold text-blue-600 hover:underline">View All</a>
+        </div>
+        <div id="low-stock-list" class="flex-1 overflow-y-auto space-y-2.5 pr-1 max-h-60">
+          <div class="text-center py-8 text-slate-400 text-xs">Loading alerts...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 4. RECENT ACTIVITY TABLES -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      
+      <!-- Recent Sales -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Recent Customer Sales</h3>
+            <p class="text-xs text-slate-500">Latest completed transactions</p>
+          </div>
+          <a href="/sales/list.html" class="text-xs font-semibold text-blue-600 hover:underline">All Sales</a>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50/80 text-slate-500 uppercase font-semibold border-b border-slate-100">
+              <tr>
+                <th class="px-4 py-3">Invoice</th>
+                <th class="px-4 py-3">Customer</th>
+                <th class="px-4 py-3">Total</th>
+                <th class="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody id="recent-sales-tbody" class="divide-y divide-slate-100">
+              <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Purchases -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Recent Supplier Purchases</h3>
+            <p class="text-xs text-slate-500">Latest inventory procurements</p>
+          </div>
+          <a href="/purchases/index.html" class="text-xs font-semibold text-blue-600 hover:underline">All Purchases</a>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50/80 text-slate-500 uppercase font-semibold border-b border-slate-100">
+              <tr>
+                <th class="px-4 py-3">PO Number</th>
+                <th class="px-4 py-3">Supplier</th>
+                <th class="px-4 py-3">Total</th>
+                <th class="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody id="recent-purchases-tbody" class="divide-y divide-slate-100">
+              <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('dashboard');
+
+    let chartInstance = null;
+
+    async function loadDashboard() {
+      try {
+        const res = await API.get('/dashboard/stats');
+        const data = res.data;
+
+        // Financial KPIs
+        document.getElementById('metric-revenue').innerText = Auth.formatMoney(data.finance.total_revenue);
+        document.getElementById('metric-today-sales').innerText = Auth.formatMoney(data.sales.today_amount);
+        document.getElementById('metric-purchases').innerText = Auth.formatMoney(data.purchases.total_amount);
+        document.getElementById('metric-today-purchases').innerText = Auth.formatMoney(data.purchases.today_amount);
+        document.getElementById('metric-expenses').innerText = Auth.formatMoney(data.finance.total_expenses);
+        document.getElementById('metric-net-margin').innerText = Auth.formatMoney(data.finance.net_margin);
+        document.getElementById('metric-stock-value').innerText = Auth.formatMoney(data.stock.stock_cost_value);
+        document.getElementById('metric-stock-units').innerText = data.stock.total_units.toLocaleString();
+
+        // Secondary counts
+        document.getElementById('metric-count-products').innerText = data.counts.products;
+        document.getElementById('metric-count-categories').innerText = data.counts.categories;
+        document.getElementById('metric-count-customers').innerText = data.counts.customers;
+        document.getElementById('metric-count-suppliers').innerText = data.counts.suppliers;
+        document.getElementById('metric-customer-debt').innerText = Auth.formatMoney(data.finance.customer_debt);
+        document.getElementById('metric-supplier-debt').innerText = Auth.formatMoney(data.finance.supplier_debt);
+
+        // Low stock pill & list
+        document.getElementById('low-stock-count-pill').innerText = data.stock.low_stock_count;
+        const lowStockContainer = document.getElementById('low-stock-list');
+        if (data.stock.low_stock_items.length === 0) {
+          lowStockContainer.innerHTML = '<div class="text-center py-8 text-emerald-600 font-medium text-xs"><i class="fa-solid fa-circle-check text-lg mb-1 block"></i>All inventory levels healthy</div>';
+        } else {
+          lowStockContainer.innerHTML = data.stock.low_stock_items.map(item => `
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-rose-50/60 border border-rose-100/80">
+              <div class="truncate mr-2">
+                <div class="text-xs font-bold text-slate-800 truncate">${item.name}</div>
+                <div class="text-[10px] text-slate-500">SKU: ${item.sku} &bull; Min: ${item.min_stock_level}</div>
+              </div>
+              <div class="text-right shrink-0">
+                <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-rose-500 text-white">${item.current_stock} ${item.unit}</span>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        // Render Recent Sales
+        const salesTbody = document.getElementById('recent-sales-tbody');
+        if (data.recent_sales.length === 0) {
+          salesTbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-400">No sales recorded yet</td></tr>';
+        } else {
+          salesTbody.innerHTML = data.recent_sales.map(s => {
+            const statusClass = s.payment_status === 'Paid' 
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+              : (s.payment_status === 'Partially Paid' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200');
+            return `
+              <tr class="hover:bg-slate-50/60">
+                <td class="px-4 py-3 font-semibold text-slate-900">${s.invoice_number}</td>
+                <td class="px-4 py-3 text-slate-600 truncate max-w-[120px]">${s.customer_name}</td>
+                <td class="px-4 py-3 font-bold text-slate-800">${Auth.formatMoney(s.total)}</td>
+                <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${s.payment_status}</span></td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        // Render Recent Purchases
+        const purchTbody = document.getElementById('recent-purchases-tbody');
+        if (data.recent_purchases.length === 0) {
+          purchTbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-400">No purchases recorded yet</td></tr>';
+        } else {
+          purchTbody.innerHTML = data.recent_purchases.map(p => {
+            const statusClass = p.payment_status === 'Paid' 
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+              : (p.payment_status === 'Partially Paid' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200');
+            return `
+              <tr class="hover:bg-slate-50/60">
+                <td class="px-4 py-3 font-semibold text-slate-900">${p.invoice_number}</td>
+                <td class="px-4 py-3 text-slate-600 truncate max-w-[120px]">${p.supplier_name || 'Vendor'}</td>
+                <td class="px-4 py-3 font-bold text-slate-800">${Auth.formatMoney(p.total)}</td>
+                <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${p.payment_status}</span></td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        // Render Trend Chart
+        renderChart(data.chart_data);
+
+      } catch (err) {
+        Toast.error('Failed to load dashboard metrics: ' + err.message);
+      }
+    }
+
+    function renderChart(chartData) {
+      const ctx = document.getElementById('salesChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+
+      const labels = chartData.map(d => {
+        const dt = new Date(d.date);
+        return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
+      });
+      const sales = chartData.map(d => Number(d.sales));
+      const purchases = chartData.map(d => Number(d.purchases));
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Sales Revenue',
+              data: sales,
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              tension: 0.35,
+              fill: true,
+              borderWidth: 2.5
+            },
+            {
+              label: 'Purchases Cost',
+              data: purchases,
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59, 130, 246, 0.05)',
+              tension: 0.35,
+              fill: true,
+              borderWidth: 2.5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: { boxWidth: 12, font: { size: 11, family: 'Inter' } }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (val) => '$' + val,
+                font: { size: 10 }
+              },
+              grid: { color: '#f1f5f9' }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', loadDashboard);
+  </script>
+</body>
+</html>

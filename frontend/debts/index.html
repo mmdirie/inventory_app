@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Debts & Credit Management – Apex IMS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+<div id="app-layout">
+  <!-- ─── Page Content (injected after sidebar/navbar by Layout) ─── -->
+  <div class="p-6 space-y-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800">Debts &amp; Credit Management</h1>
+        <p class="text-sm text-slate-500 mt-1">Track customer and supplier outstanding balances</p>
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      <!-- Total Outstanding -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-circle-exclamation text-red-600 text-xl"></i>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Outstanding</p>
+          <p id="summary-total" class="text-2xl font-bold text-slate-800 mt-0.5">$0.00</p>
+        </div>
+      </div>
+      <!-- Total Paid -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-circle-check text-green-600 text-xl"></i>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Paid</p>
+          <p id="summary-paid" class="text-2xl font-bold text-slate-800 mt-0.5">$0.00</p>
+        </div>
+      </div>
+      <!-- Total Remaining -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-clock text-yellow-600 text-xl"></i>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Remaining</p>
+          <p id="summary-remaining" class="text-2xl font-bold text-slate-800 mt-0.5">$0.00</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Card -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+
+      <!-- Tab Navigation -->
+      <div class="border-b border-slate-200 px-6 pt-4">
+        <nav class="flex gap-1" id="debt-tabs">
+          <button data-type="" class="tab-btn px-4 py-2 text-sm font-medium rounded-t-md transition-colors active-tab">
+            <i class="fa-solid fa-layer-group mr-1.5"></i>All Debts
+          </button>
+          <button data-type="Customer" class="tab-btn px-4 py-2 text-sm font-medium rounded-t-md transition-colors">
+            <i class="fa-solid fa-user mr-1.5"></i>Customer Debts
+          </button>
+          <button data-type="Supplier" class="tab-btn px-4 py-2 text-sm font-medium rounded-t-md transition-colors">
+            <i class="fa-solid fa-truck mr-1.5"></i>Supplier Debts
+          </button>
+        </nav>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-slate-100">
+        <label class="text-sm font-medium text-slate-600">Status:</label>
+        <select id="filter-status"
+          class="text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <option value="">All Statuses</option>
+          <option value="Unpaid">Unpaid</option>
+          <option value="Partially Paid">Partially Paid</option>
+          <option value="Paid">Paid</option>
+        </select>
+        <button id="btn-reset-filters"
+          class="text-sm text-slate-500 hover:text-slate-700 underline underline-offset-2 transition-colors">
+          Reset
+        </button>
+        <div class="ml-auto text-sm text-slate-500" id="result-count"></div>
+      </div>
+
+      <!-- Table -->
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+              <th class="px-5 py-3 text-left font-semibold">Ref #</th>
+              <th class="px-5 py-3 text-left font-semibold">Type</th>
+              <th class="px-5 py-3 text-left font-semibold">Party Name</th>
+              <th class="px-5 py-3 text-left font-semibold">Reference</th>
+              <th class="px-5 py-3 text-right font-semibold">Total</th>
+              <th class="px-5 py-3 text-right font-semibold">Paid</th>
+              <th class="px-5 py-3 text-right font-semibold">Remaining</th>
+              <th class="px-5 py-3 text-left font-semibold">Due Date</th>
+              <th class="px-5 py-3 text-left font-semibold">Status</th>
+              <th class="px-5 py-3 text-center font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="debts-table-body" class="divide-y divide-slate-100">
+            <tr>
+              <td colspan="10" class="px-5 py-10 text-center text-slate-400">
+                <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+                <p class="mt-2 text-sm">Loading debts…</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-slate-200">
+        <p id="pagination-info" class="text-sm text-slate-500"></p>
+        <div id="pagination-controls" class="flex items-center gap-1"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SETTLE DEBT MODAL ═══════════════════════ -->
+<div id="settle-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+  <!-- Backdrop -->
+  <div id="settle-backdrop" class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"></div>
+
+  <!-- Dialog -->
+  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md z-10 overflow-hidden">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+          <i class="fa-solid fa-money-bill-wave text-blue-600"></i>
+        </div>
+        <h2 class="text-lg font-semibold text-slate-800">Settle Debt</h2>
+      </div>
+      <button id="settle-close" class="text-slate-400 hover:text-slate-600 transition-colors text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Debt Details -->
+    <div class="px-6 py-4 bg-blue-50 border-b border-blue-100 space-y-2 text-sm">
+      <div class="flex justify-between">
+        <span class="text-slate-500 font-medium">Party</span>
+        <span id="modal-party" class="font-semibold text-slate-800"></span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-slate-500 font-medium">Reference #</span>
+        <span id="modal-ref" class="font-mono text-slate-700"></span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-slate-500 font-medium">Total Amount</span>
+        <span id="modal-total" class="font-semibold text-slate-800"></span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-slate-500 font-medium">Already Paid</span>
+        <span id="modal-paid" class="font-semibold text-green-700"></span>
+      </div>
+      <div class="flex justify-between border-t border-blue-200 pt-2 mt-1">
+        <span class="text-slate-700 font-semibold">Remaining</span>
+        <span id="modal-remaining" class="font-bold text-red-600 text-base"></span>
+      </div>
+    </div>
+
+    <!-- Form -->
+    <form id="settle-form" class="px-6 py-5 space-y-4">
+      <input type="hidden" id="settle-debt-id" />
+      <input type="hidden" id="settle-max-amount" />
+
+      <!-- Amount -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          Amount to Pay <span class="text-red-500">*</span>
+        </label>
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">$</span>
+          <input type="number" id="settle-amount" step="0.01" min="0.01"
+            class="w-full pl-7 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="0.00" required />
+        </div>
+        <p class="text-xs text-slate-400 mt-1">Maximum: <span id="settle-max-display" class="font-medium text-slate-600"></span></p>
+      </div>
+
+      <!-- Payment Method -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          Payment Method <span class="text-red-500">*</span>
+        </label>
+        <select id="settle-method"
+          class="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          required>
+          <option value="">Select method…</option>
+          <option value="Cash">Cash</option>
+          <option value="Bank">Bank Transfer</option>
+          <option value="Mobile Money">Mobile Money</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      <!-- Payment Date -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+          Payment Date <span class="text-red-500">*</span>
+        </label>
+        <input type="date" id="settle-date"
+          class="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          required />
+      </div>
+
+      <!-- Notes -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+        <textarea id="settle-notes" rows="2"
+          class="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+          placeholder="Optional notes…"></textarea>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 pt-1">
+        <button type="button" id="settle-cancel"
+          class="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+          Cancel
+        </button>
+        <button type="submit" id="settle-submit"
+          class="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+          <i class="fa-solid fa-paper-plane"></i>
+          Submit Payment
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SCRIPTS ═══════════════════════ -->
+<script src="/js/api.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>Layout.init('debts');</script>
+
+<style>
+  .tab-btn { color: #64748b; }
+  .tab-btn:hover { color: #1e293b; background: #f1f5f9; }
+  .active-tab { color: #2563eb !important; background: #eff6ff; border-bottom: 2px solid #2563eb; font-weight: 600; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // ─── State ───────────────────────────────────────────────────────────
+  let currentPage  = 1;
+  const PAGE_LIMIT = 20;
+  let currentType  = '';
+  let currentStatus = '';
+
+  // ─── Helpers ─────────────────────────────────────────────────────────
+  const fmt = (n) => '$' + parseFloat(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    const dt = new Date(d);
+    if (isNaN(dt)) return d;
+    return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  const todayISO = () => new Date().toISOString().split('T')[0];
+
+  // ─── Summary Cards ───────────────────────────────────────────────────
+  function updateSummary(summary) {
+    document.getElementById('summary-total').textContent     = fmt(summary.total_debt);
+    document.getElementById('summary-paid').textContent      = fmt(summary.total_paid);
+    document.getElementById('summary-remaining').textContent = fmt(summary.total_remaining);
+  }
+
+  // ─── Status Badge ────────────────────────────────────────────────────
+  function statusBadge(status) {
+    const map = {
+      'Unpaid':        'bg-red-100 text-red-700',
+      'Partially Paid':'bg-yellow-100 text-yellow-700',
+      'Paid':          'bg-green-100 text-green-700',
+    };
+    const cls = map[status] || 'bg-slate-100 text-slate-600';
+    return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}">${status}</span>`;
+  }
+
+  // ─── Type Badge ──────────────────────────────────────────────────────
+  function typeBadge(type) {
+    const isCustomer = type === 'Customer';
+    const cls = isCustomer
+      ? 'bg-blue-100 text-blue-700'
+      : 'bg-purple-100 text-purple-700';
+    const icon = isCustomer ? 'fa-user' : 'fa-truck';
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}">
+              <i class="fa-solid ${icon} text-[10px]"></i>${type}
+            </span>`;
+  }
+
+  // ─── Fetch & Render Table ─────────────────────────────────────────────
+  async function loadDebts() {
+    const tbody = document.getElementById('debts-table-body');
+    tbody.innerHTML = `<tr><td colspan="10" class="px-5 py-10 text-center text-slate-400">
+      <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+      <p class="mt-2 text-sm">Loading debts…</p>
+    </td></tr>`;
+
+    try {
+      const params = new URLSearchParams({
+        page:  currentPage,
+        limit: PAGE_LIMIT,
+      });
+      if (currentType)   params.set('debt_type', currentType);
+      if (currentStatus) params.set('status',    currentStatus);
+
+      const res = await API.get(`/debts?${params.toString()}`);
+      const { summary, debts, pagination } = res.data;
+
+      updateSummary(summary);
+      renderTable(debts);
+      renderPagination(pagination);
+
+      const total = pagination ? pagination.total : debts.length;
+      document.getElementById('result-count').textContent =
+        `${total} record${total !== 1 ? 's' : ''} found`;
+
+    } catch (err) {
+      console.error(err);
+      tbody.innerHTML = `<tr><td colspan="10" class="px-5 py-10 text-center text-red-400">
+        <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+        <p class="mt-2 text-sm">Failed to load debts. Please try again.</p>
+      </td></tr>`;
+      Toast.error('Failed to load debts.');
+    }
+  }
+
+  // ─── Render Table Rows ────────────────────────────────────────────────
+  function renderTable(debts) {
+    const tbody = document.getElementById('debts-table-body');
+    if (!debts || debts.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" class="px-5 py-12 text-center text-slate-400">
+        <i class="fa-solid fa-inbox text-3xl mb-3 block"></i>
+        <p class="text-sm">No debt records found.</p>
+      </td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = debts.map(d => {
+      const isPaid    = d.status === 'Paid';
+      const isOverdue = parseInt(d.is_overdue) === 1 && !isPaid;
+
+      const overdueTag = isOverdue
+        ? `<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white">OVERDUE</span>`
+        : '';
+
+      const actionBtn = isPaid
+        ? `<button disabled
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">
+              <i class="fa-solid fa-check"></i>Settled
+           </button>`
+        : `<button data-id="${d.id}"
+              data-party="${escapeHTML(d.party_name)}"
+              data-ref="${escapeHTML(d.reference_number || '—')}"
+              data-total="${d.total_amount}"
+              data-paid="${d.paid_amount}"
+              data-remaining="${d.remaining_amount}"
+              class="settle-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors">
+              <i class="fa-solid fa-money-bill-wave"></i>Settle / Pay
+           </button>`;
+
+      return `<tr class="hover:bg-slate-50 transition-colors">
+        <td class="px-5 py-3 font-mono text-xs text-slate-600">${escapeHTML(d.reference_number || '—')}</td>
+        <td class="px-5 py-3">${typeBadge(d.debt_type)}</td>
+        <td class="px-5 py-3 font-medium text-slate-800">${escapeHTML(d.party_name || '—')}</td>
+        <td class="px-5 py-3 text-slate-600 text-xs">
+          ${escapeHTML(d.reference_type || '')}
+          ${d.reference_id ? `<span class="font-mono">#${d.reference_id}</span>` : ''}
+        </td>
+        <td class="px-5 py-3 text-right font-medium">${fmt(d.total_amount)}</td>
+        <td class="px-5 py-3 text-right text-green-700 font-medium">${fmt(d.paid_amount)}</td>
+        <td class="px-5 py-3 text-right text-red-600 font-semibold">${fmt(d.remaining_amount)}</td>
+        <td class="px-5 py-3 text-slate-600 whitespace-nowrap">${fmtDate(d.due_date)}</td>
+        <td class="px-5 py-3">
+          <div class="flex flex-wrap items-center gap-1">
+            ${statusBadge(d.status)}
+            ${overdueTag}
+          </div>
+        </td>
+        <td class="px-5 py-3 text-center">${actionBtn}</td>
+      </tr>`;
+    }).join('');
+
+    // Attach settle listeners
+    tbody.querySelectorAll('.settle-btn').forEach(btn => {
+      btn.addEventListener('click', () => openSettleModal(btn.dataset));
+    });
+  }
+
+  // ─── Pagination ───────────────────────────────────────────────────────
+  function renderPagination(pagination) {
+    const info    = document.getElementById('pagination-info');
+    const controls = document.getElementById('pagination-controls');
+    if (!pagination) { info.textContent = ''; controls.innerHTML = ''; return; }
+
+    const { total, page, total_pages } = pagination;
+    const from = total === 0 ? 0 : (page - 1) * PAGE_LIMIT + 1;
+    const to   = Math.min(page * PAGE_LIMIT, total);
+    info.textContent = `Showing ${from}–${to} of ${total} records`;
+
+    controls.innerHTML = '';
+
+    const mkBtn = (label, pg, disabled = false, active = false) => {
+      const b = document.createElement('button');
+      b.innerHTML  = label;
+      b.disabled   = disabled;
+      b.className  = [
+        'px-3 py-1.5 text-sm rounded-lg border transition-colors',
+        active   ? 'bg-blue-600 text-white border-blue-600 font-semibold' :
+                   'border-slate-300 text-slate-600 hover:bg-slate-100',
+        disabled ? 'opacity-40 cursor-not-allowed' : '',
+      ].join(' ');
+      if (!disabled) b.addEventListener('click', () => { currentPage = pg; loadDebts(); });
+      return b;
+    };
+
+    controls.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', page - 1, page <= 1));
+
+    const range = paginate(page, total_pages);
+    range.forEach(p => {
+      if (p === '…') {
+        const s = document.createElement('span');
+        s.textContent = '…';
+        s.className = 'px-2 py-1.5 text-slate-400 text-sm select-none';
+        controls.appendChild(s);
+      } else {
+        controls.appendChild(mkBtn(p, p, false, p === page));
+      }
+    });
+
+    controls.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', page + 1, page >= total_pages));
+  }
+
+  function paginate(current, total) {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    if (current <= 4) return [1, 2, 3, 4, 5, '…', total];
+    if (current >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total];
+    return [1, '…', current - 1, current, current + 1, '…', total];
+  }
+
+  // ─── HTML Escape ──────────────────────────────────────────────────────
+  function escapeHTML(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ─── Tabs ─────────────────────────────────────────────────────────────
+  document.getElementById('debt-tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
+    btn.classList.add('active-tab');
+    currentType = btn.dataset.type;
+    currentPage = 1;
+    loadDebts();
+  });
+
+  // ─── Filters ──────────────────────────────────────────────────────────
+  document.getElementById('filter-status').addEventListener('change', (e) => {
+    currentStatus = e.target.value;
+    currentPage   = 1;
+    loadDebts();
+  });
+
+  document.getElementById('btn-reset-filters').addEventListener('click', () => {
+    document.getElementById('filter-status').value = '';
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
+    document.querySelector('.tab-btn[data-type=""]').classList.add('active-tab');
+    currentType   = '';
+    currentStatus = '';
+    currentPage   = 1;
+    loadDebts();
+  });
+
+  // ─── Settle Modal ─────────────────────────────────────────────────────
+  const modal    = document.getElementById('settle-modal');
+  const backdrop = document.getElementById('settle-backdrop');
+
+  function openSettleModal(data) {
+    document.getElementById('settle-debt-id').value   = data.id;
+    document.getElementById('settle-max-amount').value = data.remaining;
+    document.getElementById('modal-party').textContent     = data.party;
+    document.getElementById('modal-ref').textContent       = data.ref;
+    document.getElementById('modal-total').textContent     = fmt(data.total);
+    document.getElementById('modal-paid').textContent      = fmt(data.paid);
+    document.getElementById('modal-remaining').textContent = fmt(data.remaining);
+    document.getElementById('settle-max-display').textContent = fmt(data.remaining);
+
+    const amtInput = document.getElementById('settle-amount');
+    amtInput.value = parseFloat(data.remaining).toFixed(2);
+    amtInput.max   = parseFloat(data.remaining).toFixed(2);
+
+    document.getElementById('settle-method').value = '';
+    document.getElementById('settle-date').value   = todayISO();
+    document.getElementById('settle-notes').value  = '';
+
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeSettleModal() {
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('settle-close').addEventListener('click',  closeSettleModal);
+  document.getElementById('settle-cancel').addEventListener('click', closeSettleModal);
+  backdrop.addEventListener('click', closeSettleModal);
+
+  // ─── Settle Form Submit ───────────────────────────────────────────────
+  document.getElementById('settle-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id        = document.getElementById('settle-debt-id').value;
+    const maxAmt    = parseFloat(document.getElementById('settle-max-amount').value);
+    const amount    = parseFloat(document.getElementById('settle-amount').value);
+    const method    = document.getElementById('settle-method').value;
+    const date      = document.getElementById('settle-date').value;
+    const notes     = document.getElementById('settle-notes').value.trim();
+
+    if (isNaN(amount) || amount <= 0) {
+      Toast.error('Please enter a valid amount greater than 0.');
+      return;
+    }
+    if (amount > maxAmt + 0.001) {
+      Toast.error(`Amount cannot exceed the remaining balance of ${fmt(maxAmt)}.`);
+      return;
+    }
+    if (!method) {
+      Toast.error('Please select a payment method.');
+      return;
+    }
+    if (!date) {
+      Toast.error('Please select a payment date.');
+      return;
+    }
+
+    const submitBtn = document.getElementById('settle-submit');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing…';
+
+    try {
+      await API.post(`/debts/${id}/pay`, {
+        amount:          amount,
+        payment_method:  method,
+        payment_date:    date,
+        notes:           notes || undefined,
+      });
+
+      Toast.success('Payment recorded successfully!');
+      closeSettleModal();
+      loadDebts();
+    } catch (err) {
+      console.error(err);
+      Toast.error(err?.message || 'Failed to record payment. Please try again.');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Payment';
+    }
+  });
+
+  // ─── Enforce max on amount input ──────────────────────────────────────
+  document.getElementById('settle-amount').addEventListener('blur', function () {
+    const max = parseFloat(document.getElementById('settle-max-amount').value);
+    const val = parseFloat(this.value);
+    if (!isNaN(val) && val > max) {
+      this.value = max.toFixed(2);
+      Toast.error(`Amount capped to remaining balance: ${fmt(max)}`);
+    }
+  });
+
+  // ─── Init ─────────────────────────────────────────────────────────────
+  loadDebts();
+});
+</script>
+</body>
+</html>

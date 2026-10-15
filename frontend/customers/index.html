@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customers - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+    
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Customer Accounts</h1>
+        <p class="text-xs text-slate-500 mt-1">Manage retail clients, corporate accounts, credit limits, and receivable balances</p>
+      </div>
+      <button id="add-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center self-start sm:self-auto">
+        <i class="fa-solid fa-plus mr-2"></i> Add Customer
+      </button>
+    </div>
+
+    <!-- SEARCH & FILTERS -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" id="search-input" placeholder="Search customer name, phone, email..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <select id="type-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Customer Types</option>
+          <option value="Retail">Retail</option>
+          <option value="Wholesale">Wholesale</option>
+          <option value="Corporate">Corporate</option>
+        </select>
+        <select id="status-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+            <tr>
+              <th class="px-5 py-3.5">Customer Name</th>
+              <th class="px-4 py-3.5">Contact Details</th>
+              <th class="px-4 py-3.5">Account Type</th>
+              <th class="px-4 py-3.5">Credit Limit</th>
+              <th class="px-4 py-3.5">Outstanding Debt</th>
+              <th class="px-4 py-3.5">Orders</th>
+              <th class="px-4 py-3.5">Status</th>
+              <th class="px-5 py-3.5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="customers-tbody" class="divide-y divide-slate-100">
+            <tr><td colspan="8" class="px-5 py-8 text-center text-slate-400">Loading customer directory...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ADD / EDIT MODAL -->
+  <div id="cust-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 my-8">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="modal-title" class="text-base font-bold text-slate-900">Add Customer</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <form id="cust-form" class="mt-4 space-y-4">
+        <input type="hidden" id="cust-id" />
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Customer / Organization Name <span class="text-rose-500">*</span></label>
+          <input type="text" id="cust-name" required placeholder="Acme Global Corporation" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Phone Number</label>
+            <input type="text" id="cust-phone" placeholder="+1 (555) 441-0001" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
+            <input type="email" id="cust-email" placeholder="billing@acme.com" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Customer Type</label>
+            <select id="cust-type" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="Retail">Retail</option>
+              <option value="Wholesale">Wholesale</option>
+              <option value="Corporate">Corporate</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Credit Limit ($)</label>
+            <input type="number" step="0.01" id="cust-credit" value="0.00" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Street Address</label>
+          <input type="text" id="cust-address" placeholder="500 Tech Parkway, Suite 1200" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">City</label>
+            <input type="text" id="cust-city" placeholder="Chicago" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Status</label>
+            <select id="cust-status" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Notes / Terms</label>
+          <textarea id="cust-notes" rows="2" placeholder="Preferred terms, authorized purchasers..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+        </div>
+        <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
+          <button type="submit" class="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('customers');
+
+    async function loadCustomers() {
+      const search = document.getElementById('search-input').value.trim();
+      const customer_type = document.getElementById('type-filter').value;
+      const status = document.getElementById('status-filter').value;
+
+      try {
+        const res = await API.get('/customers', { search, customer_type, status });
+        const list = res.data;
+        const tbody = document.getElementById('customers-tbody');
+
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="px-5 py-8 text-center text-slate-400">No customers found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = list.map(c => {
+          const balance = Number(c.balance);
+          const balanceBadge = balance > 0
+            ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200">${Auth.formatMoney(balance)}</span>`
+            : `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">$0.00</span>`;
+
+          const typeColors = {
+            'Corporate': 'bg-purple-50 text-purple-700 border-purple-200',
+            'Wholesale': 'bg-blue-50 text-blue-700 border-blue-200',
+            'Retail': 'bg-slate-100 text-slate-700 border-slate-200'
+          };
+          const typeBadge = typeColors[c.customer_type] || 'bg-slate-100 text-slate-700';
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="px-5 py-3.5">
+                <div class="font-bold text-slate-900">${c.name}</div>
+                <div class="text-[11px] text-slate-400">${c.city || 'Local'}</div>
+              </td>
+              <td class="px-4 py-3.5">
+                <div class="text-slate-800 font-medium">${c.phone || '-'}</div>
+                <div class="text-[11px] text-slate-400">${c.email || '-'}</div>
+              </td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${typeBadge}">${c.customer_type}</span></td>
+              <td class="px-4 py-3.5 text-slate-600">${Auth.formatMoney(c.credit_limit)}</td>
+              <td class="px-4 py-3.5">${balanceBadge}</td>
+              <td class="px-4 py-3.5 font-bold text-slate-700">${c.total_orders_count} sales</td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${c.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}">${c.status}</span></td>
+              <td class="px-5 py-3.5 text-right space-x-2">
+                <button onclick="editCustomer(${c.id})" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="deleteCustomer(${c.id}, '${c.name.replace(/'/g, "\\'")}')" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    const modal = document.getElementById('cust-modal');
+    const form = document.getElementById('cust-form');
+
+    document.getElementById('add-btn').addEventListener('click', () => {
+      form.reset();
+      document.getElementById('cust-id').value = '';
+      document.getElementById('modal-title').innerText = 'Add Customer';
+      modal.classList.remove('hidden');
+    });
+
+    function closeModal() {
+      modal.classList.add('hidden');
+    }
+
+    async function editCustomer(id) {
+      try {
+        const res = await API.get(`/customers/${id}`);
+        const c = res.data;
+        document.getElementById('cust-id').value = c.id;
+        document.getElementById('modal-title').innerText = 'Edit Customer';
+        document.getElementById('cust-name').value = c.name;
+        document.getElementById('cust-phone').value = c.phone || '';
+        document.getElementById('cust-email').value = c.email || '';
+        document.getElementById('cust-type').value = c.customer_type;
+        document.getElementById('cust-credit').value = c.credit_limit;
+        document.getElementById('cust-address').value = c.address || '';
+        document.getElementById('cust-city').value = c.city || '';
+        document.getElementById('cust-notes').value = c.notes || '';
+        document.getElementById('cust-status').value = c.status;
+        modal.classList.remove('hidden');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('cust-id').value;
+      const payload = {
+        name: document.getElementById('cust-name').value.trim(),
+        phone: document.getElementById('cust-phone').value.trim(),
+        email: document.getElementById('cust-email').value.trim(),
+        customer_type: document.getElementById('cust-type').value,
+        credit_limit: parseFloat(document.getElementById('cust-credit').value) || 0,
+        address: document.getElementById('cust-address').value.trim(),
+        city: document.getElementById('cust-city').value.trim(),
+        notes: document.getElementById('cust-notes').value.trim(),
+        status: document.getElementById('cust-status').value
+      };
+
+      try {
+        if (id) {
+          await API.put(`/customers/${id}`, payload);
+          Toast.success('Customer updated');
+        } else {
+          await API.post('/customers', payload);
+          Toast.success('Customer created');
+        }
+        closeModal();
+        loadCustomers();
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    });
+
+    async function deleteCustomer(id, name) {
+      if (!confirm(`Delete or deactivate customer "${name}"?`)) return;
+      try {
+        await API.delete(`/customers/${id}`);
+        Toast.success('Customer removed');
+        loadCustomers();
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    document.getElementById('search-input').addEventListener('input', () => loadCustomers());
+    document.getElementById('type-filter').addEventListener('change', () => loadCustomers());
+    document.getElementById('status-filter').addEventListener('change', () => loadCustomers());
+
+    document.addEventListener('DOMContentLoaded', loadCustomers);
+  </script>
+</body>
+</html>

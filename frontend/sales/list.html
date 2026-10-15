@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sales Orders - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+    
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Sales Orders History</h1>
+        <p class="text-xs text-slate-500 mt-1">Transaction log, customer billing, and invoice archives</p>
+      </div>
+      <a href="/sales/index.html" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center self-start sm:self-auto">
+        <i class="fa-solid fa-cash-register mr-2"></i> Launch POS
+      </a>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" id="search-input" placeholder="Search invoice # or customer..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <select id="warehouse-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Warehouses</option>
+        </select>
+        <select id="payment-method-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Payment Methods</option>
+          <option value="Cash">Cash</option>
+          <option value="Bank">Bank Transfer</option>
+          <option value="Mobile Money">Mobile Money</option>
+          <option value="Credit">Credit</option>
+        </select>
+        <select id="status-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Statuses</option>
+          <option value="Paid">Paid</option>
+          <option value="Partially Paid">Partially Paid</option>
+          <option value="Unpaid">Unpaid</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+            <tr>
+              <th class="px-5 py-3.5">Invoice #</th>
+              <th class="px-4 py-3.5">Customer</th>
+              <th class="px-4 py-3.5">Warehouse</th>
+              <th class="px-4 py-3.5">Sale Date</th>
+              <th class="px-4 py-3.5">Method</th>
+              <th class="px-4 py-3.5">Total Amount</th>
+              <th class="px-4 py-3.5">Paid</th>
+              <th class="px-4 py-3.5">Debt Balance</th>
+              <th class="px-4 py-3.5">Status</th>
+              <th class="px-5 py-3.5 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="sales-tbody" class="divide-y divide-slate-100">
+            <tr><td colspan="10" class="px-5 py-8 text-center text-slate-400">Loading sales records...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <div id="pagination-info">Showing 0 orders</div>
+        <div class="flex items-center space-x-2">
+          <button id="prev-page-btn" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40">Previous</button>
+          <span id="current-page-num" class="font-bold text-slate-700">1</span>
+          <button id="next-page-btn" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40">Next</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- VIEW SALE & INVOICE MODAL -->
+  <div id="sale-view-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 id="modal-inv-num" class="text-base font-bold text-slate-900">Invoice Details</h3>
+          <p id="modal-inv-date" class="text-xs text-slate-500"></p>
+        </div>
+        <button onclick="closeSaleModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div id="modal-sale-body" class="mt-4 space-y-4 text-xs">
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex justify-between items-center">
+        <button onclick="printCurrentInvoice()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center space-x-1">
+          <i class="fa-solid fa-print"></i> <span>Print Invoice</span>
+        </button>
+        <button onclick="closeSaleModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('sales');
+
+    let currentPage = 1;
+    const limit = 15;
+    let currentInvoiceData = null;
+
+    async function initFilters() {
+      try {
+        const whRes = await API.get('/warehouses');
+        const whs = whRes.data || [];
+        document.getElementById('warehouse-filter').innerHTML = '<option value="">All Warehouses</option>' + 
+          whs.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+      } catch (err) {}
+    }
+
+    async function loadSales(page = 1) {
+      currentPage = page;
+      const search = document.getElementById('search-input').value.trim();
+      const warehouse_id = document.getElementById('warehouse-filter').value;
+      const payment_method = document.getElementById('payment-method-filter').value;
+      const payment_status = document.getElementById('status-filter').value;
+
+      try {
+        const res = await API.get('/sales', { page, limit, search, warehouse_id, payment_method, payment_status });
+        const { sales, pagination } = res.data;
+        const tbody = document.getElementById('sales-tbody');
+
+        if (sales.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="10" class="px-5 py-8 text-center text-slate-400">No sales transactions found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = sales.map(s => {
+          const statusClass = s.payment_status === 'Paid' 
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+            : (s.payment_status === 'Partially Paid' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200');
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="px-5 py-3.5 font-bold text-slate-900">${s.invoice_number}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-800">${s.customer_name}</td>
+              <td class="px-4 py-3.5 text-slate-600">${s.warehouse_name}</td>
+              <td class="px-4 py-3.5 text-slate-500">${s.sale_date.slice(0, 10)}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-700">${s.payment_method}</td>
+              <td class="px-4 py-3.5 font-black text-slate-900">${Auth.formatMoney(s.total)}</td>
+              <td class="px-4 py-3.5 text-emerald-600 font-bold">${Auth.formatMoney(s.paid_amount)}</td>
+              <td class="px-4 py-3.5 text-rose-600 font-bold">${Auth.formatMoney(s.remaining_amount)}</td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${s.payment_status}</span></td>
+              <td class="px-5 py-3.5 text-right">
+                <button onclick="viewSaleDetails(${s.id})" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold">
+                  Invoice
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        document.getElementById('pagination-info').innerText = `Showing ${sales.length} of ${pagination.total} sales`;
+        document.getElementById('current-page-num').innerText = pagination.page;
+        document.getElementById('prev-page-btn').disabled = pagination.page <= 1;
+        document.getElementById('next-page-btn').disabled = pagination.page >= pagination.total_pages;
+
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    const modal = document.getElementById('sale-view-modal');
+    function closeSaleModal() {
+      modal.classList.add('hidden');
+    }
+
+    async function viewSaleDetails(id) {
+      try {
+        const res = await API.get(`/sales/${id}`);
+        const s = res.data;
+        currentInvoiceData = s;
+
+        document.getElementById('modal-inv-num').innerText = `Invoice: ${s.invoice_number}`;
+        document.getElementById('modal-inv-date').innerText = `Date: ${s.sale_date.slice(0, 10)} | Customer: ${s.customer_name}`;
+
+        const body = document.getElementById('modal-sale-body');
+        body.innerHTML = `
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 grid grid-cols-2 gap-2 text-xs">
+            <div><span class="text-slate-400 block font-medium">Customer</span> <span class="font-bold">${s.customer_name}</span></div>
+            <div><span class="text-slate-400 block font-medium">Payment Mode</span> <span class="font-bold">${s.payment_method}</span></div>
+            <div><span class="text-slate-400 block font-medium">Fulfillment Warehouse</span> <span class="font-bold">${s.warehouse_name}</span></div>
+            <div><span class="text-slate-400 block font-medium">Cashier / Staff</span> <span class="font-bold">${s.created_by_name || 'System'}</span></div>
+          </div>
+
+          <div class="border border-slate-200 rounded-xl overflow-hidden">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                <tr>
+                  <th class="px-3 py-2">Product</th>
+                  <th class="px-3 py-2">Qty</th>
+                  <th class="px-3 py-2">Price</th>
+                  <th class="px-3 py-2 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${s.items.map(i => `
+                  <tr>
+                    <td class="px-3 py-2 font-medium">${i.product_name} <span class="block text-[10px] text-slate-400 font-mono">${i.product_sku}</span></td>
+                    <td class="px-3 py-2">${i.quantity} ${i.product_unit}</td>
+                    <td class="px-3 py-2">${Auth.formatMoney(i.unit_price)}</td>
+                    <td class="px-3 py-2 text-right font-bold text-slate-800">${Auth.formatMoney(i.total)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="p-3 bg-slate-50 rounded-xl space-y-1 text-xs">
+            <div class="flex justify-between"><span>Subtotal:</span> <span class="font-bold">${Auth.formatMoney(s.subtotal)}</span></div>
+            <div class="flex justify-between"><span>Tax:</span> <span>${Auth.formatMoney(s.tax)}</span></div>
+            <div class="flex justify-between"><span>Discount:</span> <span>${Auth.formatMoney(s.discount)}</span></div>
+            <div class="flex justify-between text-sm font-black border-t border-slate-200 pt-1"><span>Total:</span> <span class="text-emerald-600">${Auth.formatMoney(s.total)}</span></div>
+            <div class="flex justify-between text-emerald-600 font-bold"><span>Paid:</span> <span>${Auth.formatMoney(s.paid_amount)}</span></div>
+            <div class="flex justify-between text-rose-600 font-bold"><span>Remaining Debt:</span> <span>${Auth.formatMoney(s.remaining_amount)}</span></div>
+          </div>
+        `;
+
+        modal.classList.remove('hidden');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    function printCurrentInvoice() {
+      if (currentInvoiceData) {
+        window.open(`/invoices/index.html?invoice=${currentInvoiceData.invoice_number}`, '_blank');
+      }
+    }
+
+    document.getElementById('search-input').addEventListener('input', () => loadSales(1));
+    document.getElementById('warehouse-filter').addEventListener('change', () => loadSales(1));
+    document.getElementById('payment-method-filter').addEventListener('change', () => loadSales(1));
+    document.getElementById('status-filter').addEventListener('change', () => loadSales(1));
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await initFilters();
+      loadSales(1);
+    });
+  </script>
+</body>
+</html>

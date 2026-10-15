@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Barcode Manager - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+    <div class="mb-6">
+      <h1 class="text-2xl font-black text-slate-900">Barcode Manager</h1>
+      <p class="text-xs text-slate-500 mt-1">Look up an active product by barcode or SKU, or generate a barcode candidate.</p>
+    </div>
+    <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm max-w-3xl">
+      <form id="lookup-form" class="flex flex-col sm:flex-row gap-3">
+        <input id="lookup-code" required autocomplete="off" autofocus placeholder="Scan or enter barcode / SKU" class="flex-1 px-4 py-3 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button class="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl"><i class="fa-solid fa-magnifying-glass mr-2"></i>Find Product</button>
+        <button type="button" id="suggest-btn" class="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl">Suggest Barcode</button>
+      </form>
+    </section>
+    <section id="product-result" class="mt-5 max-w-3xl"></section>
+  </div>
+  <script src="/js/api.js"></script><script src="/js/toast.js"></script><script src="/js/auth.js"></script><script src="/js/layout.js"></script><script src="/js/ui.js"></script>
+  <script>
+    Layout.init('barcode');
+    const result = document.getElementById('product-result');
+    document.getElementById('lookup-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const code = document.getElementById('lookup-code').value.trim();
+      if (!code) return;
+      result.innerHTML = '<div class="bg-white rounded-2xl border border-slate-200 p-6 text-sm text-slate-500">Searching…</div>';
+      try {
+        const response = await API.get(`/barcode/lookup/${encodeURIComponent(code)}`);
+        const product = response.data;
+        const stock = Array.isArray(product.warehouse_stock) ? product.warehouse_stock : [];
+        result.innerHTML = `
+          <article class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div><p class="text-xs uppercase tracking-wide font-bold text-blue-600">${UI.escape(product.sku)}</p><h2 class="text-xl font-black text-slate-900 mt-1">${UI.escape(product.name)}</h2></div>
+              <span class="px-3 py-1 rounded-full text-xs font-bold ${product.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}">${UI.escape(product.status)}</span>
+            </div>
+            <div class="grid sm:grid-cols-3 gap-4 mt-6 text-sm">
+              <div><p class="text-xs text-slate-500">Barcode</p><p class="font-semibold">${UI.escape(product.barcode)}</p></div>
+              <div><p class="text-xs text-slate-500">Category / Brand</p><p class="font-semibold">${UI.escape(product.category_name || '—')} / ${UI.escape(product.brand_name || '—')}</p></div>
+              <div><p class="text-xs text-slate-500">Current stock</p><p class="font-semibold">${UI.escape(product.current_stock)} ${UI.escape(product.unit)}</p></div>
+              <div><p class="text-xs text-slate-500">Selling price</p><p class="font-semibold">${UI.money(product.selling_price)}</p></div>
+              <div><p class="text-xs text-slate-500">Default warehouse</p><p class="font-semibold">${UI.escape(product.default_warehouse_name || '—')}</p></div>
+            </div>
+            <h3 class="text-sm font-bold text-slate-800 mt-6 mb-2">Stock by warehouse</h3>
+            ${stock.length ? `<div class="divide-y divide-slate-100">${stock.map(row => `<div class="py-2 flex justify-between text-sm"><span>${UI.escape(row.warehouse_name)}</span><span class="font-semibold">${UI.escape(row.quantity)}</span></div>`).join('')}</div>` : '<p class="text-sm text-slate-500">No warehouse stock recorded.</p>'}
+          </article>`;
+      } catch (error) {
+        result.innerHTML = `<div class="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-700">${UI.escape(error.message)}</div>`;
+      }
+    });
+    document.getElementById('suggest-btn').addEventListener('click', async () => {
+      try {
+        const response = await API.get('/barcode/generate-suggested');
+        document.getElementById('lookup-code').value = response.data.barcode;
+        Toast.success(`Suggested barcode: ${response.data.barcode}`);
+      } catch (error) {
+        Toast.error(error.message);
+      }
+    });
+  </script>
+</body>
+</html>

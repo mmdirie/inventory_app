@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System Settings — Apex IMS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .section-card { transition: box-shadow 0.2s; }
+    .section-card:hover { box-shadow: 0 4px 24px 0 rgba(30,41,59,0.08); }
+    .field-label { @apply block text-sm font-medium text-slate-700 mb-1; }
+    .form-input {
+      width: 100%;
+      border-radius: 0.375rem;
+      border: 1px solid #cbd5e1;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+      color: #0f172a;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .form-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+    .form-input.dirty { border-color: #f59e0b; }
+    .dirty-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #fef3c7; color: #92400e;
+      font-size: 0.75rem; font-weight: 600;
+      padding: 2px 10px; border-radius: 9999px;
+      border: 1px solid #fcd34d;
+    }
+    .logo-preview { max-height: 80px; max-width: 200px; border-radius: 6px; border: 1px solid #e2e8f0; object-fit: contain; }
+    .section-icon { width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <div id="app-layout">
+
+    <!-- Page Content (Layout.init injects sidebar+navbar, content goes here) -->
+    <div class="p-6 max-w-5xl mx-auto space-y-6">
+
+      <!-- Page Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-gear text-blue-600"></i>
+            System Settings
+          </h1>
+          <p class="text-slate-500 text-sm mt-1">Configure your business preferences</p>
+        </div>
+        <div id="dirty-indicator" class="hidden">
+          <span class="dirty-badge">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            Unsaved changes
+          </span>
+        </div>
+      </div>
+
+      <!-- ─── SECTION A: Business Identity ─── -->
+      <div class="section-card bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-slate-50">
+          <div class="section-icon bg-blue-100 text-blue-600">
+            <i class="fa-solid fa-building"></i>
+          </div>
+          <div>
+            <h2 class="font-semibold text-slate-800">Business Identity</h2>
+            <p class="text-xs text-slate-500">Your company's basic information</p>
+          </div>
+        </div>
+        <div class="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <!-- Business Name -->
+          <div>
+            <label class="field-label" for="business_name">Business Name</label>
+            <input class="form-input" type="text" id="business_name" name="business_name" placeholder="Apex Inventory Co." />
+          </div>
+          <!-- Phone -->
+          <div>
+            <label class="field-label" for="phone">Phone</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none"><i class="fa-solid fa-phone text-xs"></i></span>
+              <input class="form-input pl-8" type="text" id="phone" name="phone" placeholder="+1 (555) 000-0000" />
+            </div>
+          </div>
+          <!-- Email -->
+          <div>
+            <label class="field-label" for="email">Email</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none"><i class="fa-solid fa-envelope text-xs"></i></span>
+              <input class="form-input pl-8" type="email" id="email" name="email" placeholder="info@yourbusiness.com" />
+            </div>
+          </div>
+          <!-- Logo URL -->
+          <div>
+            <label class="field-label" for="business_logo">Business Logo URL</label>
+            <input class="form-input" type="text" id="business_logo" name="business_logo" placeholder="https://example.com/logo.png" />
+          </div>
+          <!-- Logo Preview -->
+          <div id="logo-preview-wrap" class="sm:col-span-2 hidden">
+            <label class="field-label">Logo Preview</label>
+            <img id="logo-preview-img" src="" alt="Logo Preview" class="logo-preview" />
+          </div>
+          <!-- Address -->
+          <div class="sm:col-span-2">
+            <label class="field-label" for="address">Address</label>
+            <textarea class="form-input resize-none" id="address" name="address" rows="3" placeholder="123 Main St, City, State, ZIP"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── SECTION B: Currency & Tax ─── -->
+      <div class="section-card bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-slate-50">
+          <div class="section-icon bg-emerald-100 text-emerald-600">
+            <i class="fa-solid fa-dollar-sign"></i>
+          </div>
+          <div>
+            <h2 class="font-semibold text-slate-800">Currency &amp; Tax</h2>
+            <p class="text-xs text-slate-500">Pricing and taxation settings</p>
+          </div>
+        </div>
+        <div class="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <!-- Currency Symbol -->
+          <div>
+            <label class="field-label" for="currency">Currency Symbol</label>
+            <input class="form-input" type="text" id="currency" name="currency" placeholder="$" maxlength="5" />
+          </div>
+          <!-- Symbol Position -->
+          <div>
+            <label class="field-label" for="currency_symbol_position">Symbol Position</label>
+            <select class="form-input" id="currency_symbol_position" name="currency_symbol_position">
+              <option value="before">Before amount (e.g. $99.99)</option>
+              <option value="after">After amount (e.g. 99.99$)</option>
+            </select>
+          </div>
+          <!-- Tax Rate -->
+          <div>
+            <label class="field-label" for="tax_rate">Tax Rate (%)</label>
+            <div class="relative">
+              <input class="form-input pr-8" type="number" id="tax_rate" name="tax_rate" placeholder="0.00" min="0" max="100" step="0.01" />
+              <span class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 pointer-events-none text-sm">%</span>
+            </div>
+          </div>
+          <!-- Live Preview -->
+          <div class="flex flex-col justify-end">
+            <label class="field-label">Live Preview</label>
+            <div class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 flex items-center gap-3">
+              <i class="fa-solid fa-eye text-slate-400 text-sm"></i>
+              <span class="text-slate-500 text-sm">Sample price:</span>
+              <span id="currency-preview" class="text-lg font-bold text-slate-800">$99.99</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── SECTION C: Invoice & Numbering ─── -->
+      <div class="section-card bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-slate-50">
+          <div class="section-icon bg-violet-100 text-violet-600">
+            <i class="fa-solid fa-file-invoice"></i>
+          </div>
+          <div>
+            <h2 class="font-semibold text-slate-800">Invoice &amp; Numbering</h2>
+            <p class="text-xs text-slate-500">Document prefixes, formats, and locale</p>
+          </div>
+        </div>
+        <div class="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <!-- Invoice Prefix -->
+          <div>
+            <label class="field-label" for="invoice_prefix">Invoice Prefix</label>
+            <input class="form-input" type="text" id="invoice_prefix" name="invoice_prefix" placeholder="INV-" />
+          </div>
+          <!-- Purchase Prefix -->
+          <div>
+            <label class="field-label" for="purchase_prefix">Purchase Order Prefix</label>
+            <input class="form-input" type="text" id="purchase_prefix" name="purchase_prefix" placeholder="PO-" />
+          </div>
+          <!-- Invoice Number Format -->
+          <div>
+            <label class="field-label" for="invoice_number_format">Invoice Number Format</label>
+            <div class="relative">
+              <input class="form-input pr-10 bg-slate-50 text-slate-500" type="text" id="invoice_number_format" name="invoice_number_format" placeholder="INV-{YYYY}-{####}" />
+              <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <i class="fa-solid fa-lock text-slate-300 text-xs"></i>
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">e.g. INV-{YYYY}-{####} — {YYYY} = year, {####} = padded number</p>
+          </div>
+          <!-- Date Format -->
+          <div>
+            <label class="field-label" for="date_format">Date Format</label>
+            <select class="form-input" id="date_format" name="date_format">
+              <option value="YYYY-MM-DD">YYYY-MM-DD (2025-12-31)</option>
+              <option value="DD/MM/YYYY">DD/MM/YYYY (31/12/2025)</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY (12/31/2025)</option>
+            </select>
+          </div>
+          <!-- Timezone -->
+          <div class="sm:col-span-2">
+            <label class="field-label" for="timezone">Timezone</label>
+            <select class="form-input" id="timezone" name="timezone">
+              <option value="UTC">UTC — Coordinated Universal Time</option>
+              <option value="America/New_York">America/New_York — Eastern Time (ET)</option>
+              <option value="America/Chicago">America/Chicago — Central Time (CT)</option>
+              <option value="America/Los_Angeles">America/Los_Angeles — Pacific Time (PT)</option>
+              <option value="Europe/London">Europe/London — Greenwich Mean Time (GMT)</option>
+              <option value="Europe/Paris">Europe/Paris — Central European Time (CET)</option>
+              <option value="Asia/Karachi">Asia/Karachi — Pakistan Standard Time (PKT)</option>
+              <option value="Asia/Dubai">Asia/Dubai — Gulf Standard Time (GST)</option>
+              <option value="Asia/Kolkata">Asia/Kolkata — India Standard Time (IST)</option>
+              <option value="Asia/Shanghai">Asia/Shanghai — China Standard Time (CST)</option>
+              <option value="Australia/Sydney">Australia/Sydney — Australian Eastern Time (AEST)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── SECTION D: Operations ─── -->
+      <div class="section-card bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-slate-50">
+          <div class="section-icon bg-orange-100 text-orange-600">
+            <i class="fa-solid fa-sliders"></i>
+          </div>
+          <div>
+            <h2 class="font-semibold text-slate-800">Operations</h2>
+            <p class="text-xs text-slate-500">Inventory thresholds and receipts</p>
+          </div>
+        </div>
+        <div class="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <!-- Low Stock Threshold -->
+          <div>
+            <label class="field-label" for="low_stock_threshold">Low Stock Threshold</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none"><i class="fa-solid fa-triangle-exclamation text-xs"></i></span>
+              <input class="form-input pl-8" type="number" id="low_stock_threshold" name="low_stock_threshold" placeholder="10" min="0" step="1" />
+            </div>
+            <p class="text-xs text-slate-400 mt-1">Items at or below this quantity will be flagged as low stock</p>
+          </div>
+          <!-- Receipt Footer -->
+          <div class="sm:col-span-2">
+            <label class="field-label" for="receipt_footer">Receipt Footer Message</label>
+            <textarea class="form-input resize-none" id="receipt_footer" name="receipt_footer" rows="3" placeholder="Thank you for shopping with us!"></textarea>
+            <p class="text-xs text-slate-400 mt-1">This message appears at the bottom of printed receipts and invoices</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Save Button ─── -->
+      <div class="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-6 py-4">
+        <div id="save-status" class="text-sm text-slate-400 flex items-center gap-2">
+          <i class="fa-solid fa-circle-check text-emerald-500 hidden" id="save-ok-icon"></i>
+          <span id="save-status-text">Fill in your settings and click Save.</span>
+        </div>
+        <button id="save-btn" type="button"
+          class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold px-6 py-2.5 rounded-lg shadow transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <i class="fa-solid fa-floppy-disk"></i>
+          Save Settings
+        </button>
+      </div>
+
+    </div><!-- /page content -->
+  </div><!-- /app-layout -->
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>Layout.init('settings');</script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+      // ─── Field registry (all controllable fields) ───────────────────────────
+      const FIELDS = [
+        'business_name', 'business_logo', 'phone', 'email', 'address',
+        'currency', 'currency_symbol_position', 'tax_rate',
+        'invoice_prefix', 'purchase_prefix', 'invoice_number_format',
+        'date_format', 'timezone',
+        'low_stock_threshold', 'receipt_footer'
+      ];
+
+      // ─── Dirty state tracking ────────────────────────────────────────────────
+      let isDirty = false;
+      let originalValues = {};
+
+      function getFieldValue(id) {
+        const el = document.getElementById(id);
+        if (!el) return '';
+        return el.value;
+      }
+
+      function setFieldValue(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = (value !== null && value !== undefined) ? value : '';
+      }
+
+      function captureOriginal() {
+        FIELDS.forEach(id => { originalValues[id] = getFieldValue(id); });
+        isDirty = false;
+        updateDirtyUI();
+      }
+
+      function checkDirty() {
+        let dirty = false;
+        FIELDS.forEach(id => {
+          if (getFieldValue(id) !== originalValues[id]) dirty = true;
+        });
+        isDirty = dirty;
+        updateDirtyUI();
+      }
+
+      function updateDirtyUI() {
+        const badge = document.getElementById('dirty-indicator');
+        badge.classList.toggle('hidden', !isDirty);
+        const btn = document.getElementById('save-btn');
+        if (isDirty) {
+          btn.classList.replace('bg-blue-600', 'bg-blue-700');
+        } else {
+          btn.classList.replace('bg-blue-700', 'bg-blue-600');
+        }
+      }
+
+      // Attach change listeners to all fields
+      FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('input', checkDirty);
+          el.addEventListener('change', checkDirty);
+        }
+      });
+
+      // ─── Logo preview ────────────────────────────────────────────────────────
+      const logoInput = document.getElementById('business_logo');
+      const logoWrap  = document.getElementById('logo-preview-wrap');
+      const logoImg   = document.getElementById('logo-preview-img');
+
+      function updateLogoPreview() {
+        const url = logoInput.value.trim();
+        if (url) {
+          logoImg.src = url;
+          logoWrap.classList.remove('hidden');
+        } else {
+          logoWrap.classList.add('hidden');
+          logoImg.src = '';
+        }
+      }
+
+      logoInput.addEventListener('input', updateLogoPreview);
+      logoImg.addEventListener('error', function () {
+        logoWrap.classList.add('hidden');
+      });
+
+      // ─── Currency live preview ───────────────────────────────────────────────
+      const currencyInput    = document.getElementById('currency');
+      const positionSelect   = document.getElementById('currency_symbol_position');
+      const currencyPreview  = document.getElementById('currency-preview');
+
+      function updateCurrencyPreview() {
+        const sym = currencyInput.value.trim() || '$';
+        const pos = positionSelect.value;
+        currencyPreview.textContent = pos === 'before' ? `${sym}99.99` : `99.99${sym}`;
+      }
+
+      currencyInput.addEventListener('input', updateCurrencyPreview);
+      positionSelect.addEventListener('change', updateCurrencyPreview);
+
+      // ─── Load settings from API ──────────────────────────────────────────────
+      async function loadSettings() {
+        try {
+          const res = await API.get('/settings');
+          const d = res.data || res; // handle both wrapped and unwrapped
+          FIELDS.forEach(id => {
+            if (d[id] !== undefined) setFieldValue(id, d[id]);
+          });
+          updateLogoPreview();
+          updateCurrencyPreview();
+          captureOriginal();
+          setStatusText('Settings loaded.', false);
+        } catch (err) {
+          console.error('Failed to load settings:', err);
+          Toast.error('Failed to load settings.');
+          setStatusText('Could not load settings.', false);
+        }
+      }
+
+      // ─── Save settings ───────────────────────────────────────────────────────
+      async function saveSettings() {
+        const btn = document.getElementById('save-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+        const payload = {};
+        FIELDS.forEach(id => { payload[id] = getFieldValue(id); });
+
+        // Coerce numeric fields
+        payload.tax_rate = parseFloat(payload.tax_rate) || 0;
+        payload.low_stock_threshold = parseInt(payload.low_stock_threshold, 10) || 0;
+
+        try {
+          await API.put('/settings', payload);
+          Toast.success('Settings saved successfully!');
+          captureOriginal(); // reset dirty state
+          setStatusText('All changes saved.', true);
+        } catch (err) {
+          console.error('Save failed:', err);
+          Toast.error('Failed to save settings. Please try again.');
+          setStatusText('Save failed — please try again.', false);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Settings';
+        }
+      }
+
+      function setStatusText(msg, success) {
+        const icon = document.getElementById('save-ok-icon');
+        const text = document.getElementById('save-status-text');
+        text.textContent = msg;
+        if (success) {
+          icon.classList.remove('hidden');
+          text.className = 'text-sm text-emerald-600';
+        } else {
+          icon.classList.add('hidden');
+          text.className = 'text-sm text-slate-400';
+        }
+      }
+
+      // ─── Wire save button ────────────────────────────────────────────────────
+      document.getElementById('save-btn').addEventListener('click', saveSettings);
+
+      // ─── Warn on unload if dirty ─────────────────────────────────────────────
+      window.addEventListener('beforeunload', function (e) {
+        if (isDirty) {
+          e.preventDefault();
+          e.returnValue = 'You have unsaved settings changes. Are you sure you want to leave?';
+        }
+      });
+
+      // ─── Init ────────────────────────────────────────────────────────────────
+      loadSettings();
+    });
+  </script>
+</body>
+</html>

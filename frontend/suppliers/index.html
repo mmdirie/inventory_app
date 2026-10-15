@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Suppliers - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+    
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Suppliers & Vendors</h1>
+        <p class="text-xs text-slate-500 mt-1">Manage external procurement partners, payables, and purchase history</p>
+      </div>
+      <button id="add-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center self-start sm:self-auto">
+        <i class="fa-solid fa-plus mr-2"></i> Add Supplier
+      </button>
+    </div>
+
+    <!-- SEARCH & FILTER -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-6">
+      <div class="flex flex-col sm:flex-row gap-3">
+        <div class="flex-1 relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" id="search-input" placeholder="Search by supplier name, company, email, phone..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <select id="status-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+            <tr>
+              <th class="px-5 py-3.5">Supplier / Company</th>
+              <th class="px-4 py-3.5">Contact Details</th>
+              <th class="px-4 py-3.5">Location</th>
+              <th class="px-4 py-3.5">Total Orders</th>
+              <th class="px-4 py-3.5">Balance Owed</th>
+              <th class="px-4 py-3.5">Status</th>
+              <th class="px-5 py-3.5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="suppliers-tbody" class="divide-y divide-slate-100">
+            <tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">Loading suppliers...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ADD / EDIT MODAL -->
+  <div id="sup-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 my-8">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 id="modal-title" class="text-base font-bold text-slate-900">Add Supplier</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <form id="sup-form" class="mt-4 space-y-4">
+        <input type="hidden" id="sup-id" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Contact Name <span class="text-rose-500">*</span></label>
+            <input type="text" id="sup-name" required placeholder="Elena Vance" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Company Name</label>
+            <input type="text" id="sup-company" placeholder="Acme Logistics LLC" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Phone</label>
+            <input type="text" id="sup-phone" placeholder="+1 (555) 019-2834" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Email</label>
+            <input type="email" id="sup-email" placeholder="vendor@example.com" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Address</label>
+          <input type="text" id="sup-address" placeholder="Street Address..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">City</label>
+            <input type="text" id="sup-city" placeholder="Chicago" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Country</label>
+            <input type="text" id="sup-country" placeholder="USA" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Tax ID / Reg</label>
+            <input type="text" id="sup-tax" placeholder="TAX-89012" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Notes</label>
+          <textarea id="sup-notes" rows="2" placeholder="Payment terms, delivery schedules..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Status</label>
+          <select id="sup-status" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
+          <button type="submit" class="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('suppliers');
+
+    async function loadSuppliers() {
+      const search = document.getElementById('search-input').value.trim();
+      const status = document.getElementById('status-filter').value;
+      try {
+        const res = await API.get('/suppliers', { search, status });
+        const list = res.data;
+        const tbody = document.getElementById('suppliers-tbody');
+
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">No suppliers found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = list.map(s => {
+          const balance = Number(s.balance);
+          const balanceBadge = balance > 0
+            ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200">${Auth.formatMoney(balance)}</span>`
+            : `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">$0.00</span>`;
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="px-5 py-3.5">
+                <div class="font-bold text-slate-900">${s.name}</div>
+                <div class="text-[11px] text-slate-400">${s.company || 'Direct Supplier'}</div>
+              </td>
+              <td class="px-4 py-3.5">
+                <div class="text-slate-800 font-medium">${s.phone || '-'}</div>
+                <div class="text-[11px] text-slate-400">${s.email || '-'}</div>
+              </td>
+              <td class="px-4 py-3.5 text-slate-600">${s.city || ''} ${s.country ? `(${s.country})` : ''}</td>
+              <td class="px-4 py-3.5 font-bold text-slate-700">${s.total_purchases_count} orders</td>
+              <td class="px-4 py-3.5">${balanceBadge}</td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}">${s.status}</span></td>
+              <td class="px-5 py-3.5 text-right space-x-2">
+                <button onclick="editSupplier(${s.id})" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="deleteSupplier(${s.id}, '${s.name.replace(/'/g, "\\'")}')" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    const modal = document.getElementById('sup-modal');
+    const form = document.getElementById('sup-form');
+
+    document.getElementById('add-btn').addEventListener('click', () => {
+      form.reset();
+      document.getElementById('sup-id').value = '';
+      document.getElementById('modal-title').innerText = 'Add Supplier';
+      modal.classList.remove('hidden');
+    });
+
+    function closeModal() {
+      modal.classList.add('hidden');
+    }
+
+    async function editSupplier(id) {
+      try {
+        const res = await API.get(`/suppliers/${id}`);
+        const s = res.data;
+        document.getElementById('sup-id').value = s.id;
+        document.getElementById('modal-title').innerText = 'Edit Supplier';
+        document.getElementById('sup-name').value = s.name;
+        document.getElementById('sup-company').value = s.company || '';
+        document.getElementById('sup-phone').value = s.phone || '';
+        document.getElementById('sup-email').value = s.email || '';
+        document.getElementById('sup-address').value = s.address || '';
+        document.getElementById('sup-city').value = s.city || '';
+        document.getElementById('sup-country').value = s.country || '';
+        document.getElementById('sup-tax').value = s.tax_number || '';
+        document.getElementById('sup-notes').value = s.notes || '';
+        document.getElementById('sup-status').value = s.status;
+        modal.classList.remove('hidden');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('sup-id').value;
+      const payload = {
+        name: document.getElementById('sup-name').value.trim(),
+        company: document.getElementById('sup-company').value.trim(),
+        phone: document.getElementById('sup-phone').value.trim(),
+        email: document.getElementById('sup-email').value.trim(),
+        address: document.getElementById('sup-address').value.trim(),
+        city: document.getElementById('sup-city').value.trim(),
+        country: document.getElementById('sup-country').value.trim(),
+        tax_number: document.getElementById('sup-tax').value.trim(),
+        notes: document.getElementById('sup-notes').value.trim(),
+        status: document.getElementById('sup-status').value
+      };
+
+      try {
+        if (id) {
+          await API.put(`/suppliers/${id}`, payload);
+          Toast.success('Supplier updated');
+        } else {
+          await API.post('/suppliers', payload);
+          Toast.success('Supplier created');
+        }
+        closeModal();
+        loadSuppliers();
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    });
+
+    async function deleteSupplier(id, name) {
+      if (!confirm(`Delete or deactivate supplier "${name}"?`)) return;
+      try {
+        await API.delete(`/suppliers/${id}`);
+        Toast.success('Supplier removed');
+        loadSuppliers();
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    document.getElementById('search-input').addEventListener('input', () => loadSuppliers());
+    document.getElementById('status-filter').addEventListener('change', () => loadSuppliers());
+
+    document.addEventListener('DOMContentLoaded', loadSuppliers);
+  </script>
+</body>
+</html>

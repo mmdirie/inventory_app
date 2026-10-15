@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Purchase Orders - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+    
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Purchase Orders</h1>
+        <p class="text-xs text-slate-500 mt-1">Receive stock, replenish warehouse inventory, and track supplier payables</p>
+      </div>
+      <button id="new-po-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center self-start sm:self-auto">
+        <i class="fa-solid fa-cart-plus mr-2"></i> Create Purchase Order
+      </button>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" id="search-input" placeholder="Search PO # or supplier..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <select id="supplier-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Suppliers</option>
+        </select>
+        <select id="warehouse-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Warehouses</option>
+        </select>
+        <select id="status-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Payment Statuses</option>
+          <option value="Paid">Paid</option>
+          <option value="Partially Paid">Partially Paid</option>
+          <option value="Unpaid">Unpaid</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- PURCHASES TABLE -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+            <tr>
+              <th class="px-5 py-3.5">PO Number</th>
+              <th class="px-4 py-3.5">Supplier</th>
+              <th class="px-4 py-3.5">Receiving Facility</th>
+              <th class="px-4 py-3.5">Order Date</th>
+              <th class="px-4 py-3.5">Total Amount</th>
+              <th class="px-4 py-3.5">Paid Amount</th>
+              <th class="px-4 py-3.5">Remaining Debt</th>
+              <th class="px-4 py-3.5">Status</th>
+              <th class="px-5 py-3.5 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="purchases-tbody" class="divide-y divide-slate-100">
+            <tr><td colspan="9" class="px-5 py-8 text-center text-slate-400">Loading purchase records...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <div id="pagination-info">Showing 0 orders</div>
+        <div class="flex items-center space-x-2">
+          <button id="prev-page-btn" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40">Previous</button>
+          <span id="current-page-num" class="font-bold text-slate-700">1</span>
+          <button id="next-page-btn" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40">Next</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CREATE NEW PURCHASE ORDER MODAL -->
+  <div id="po-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 class="text-base font-bold text-slate-900">New Purchase Order</h3>
+        <button onclick="closePoModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="po-form" class="mt-4 space-y-4">
+        <!-- Top Metadata -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Supplier <span class="text-rose-500">*</span></label>
+            <select id="po-supplier" required class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Receiving Warehouse <span class="text-rose-500">*</span></label>
+            <select id="po-warehouse" required class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white">
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Purchase Date <span class="text-rose-500">*</span></label>
+            <input type="date" id="po-date" required class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+
+        <!-- Dynamic Items Table -->
+        <div class="border border-slate-200 rounded-xl overflow-hidden mt-2">
+          <div class="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 uppercase">Purchase Line Items</span>
+            <button type="button" onclick="addPoRow()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg transition">
+              <i class="fa-solid fa-plus mr-1"></i> Add Item Line
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-100 text-slate-500 uppercase font-semibold">
+                <tr>
+                  <th class="px-3 py-2 min-w-[200px]">Product</th>
+                  <th class="px-3 py-2 w-24">Qty</th>
+                  <th class="px-3 py-2 w-28">Unit Cost ($)</th>
+                  <th class="px-3 py-2 w-24">Discount ($)</th>
+                  <th class="px-3 py-2 w-28 text-right">Line Total</th>
+                  <th class="px-3 py-2 w-12 text-center"></th>
+                </tr>
+              </thead>
+              <tbody id="po-items-tbody" class="divide-y divide-slate-100">
+                <!-- Dynamically generated rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Order Calculations -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Order Notes</label>
+            <textarea id="po-notes" rows="3" placeholder="Carrier tracking, bill of lading, vendor memo..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+          </div>
+
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2 text-xs">
+            <div class="flex justify-between text-slate-600">
+              <span>Subtotal:</span>
+              <span id="po-calc-subtotal" class="font-bold text-slate-800">$0.00</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span>Tax ($):</span>
+              <input type="number" step="0.01" id="po-tax-input" value="0.00" oninput="calculatePoTotals()" class="w-24 px-2 py-1 text-right text-xs border border-slate-200 rounded-lg bg-white" />
+            </div>
+            <div class="flex items-center justify-between">
+              <span>Overall Discount ($):</span>
+              <input type="number" step="0.01" id="po-discount-input" value="0.00" oninput="calculatePoTotals()" class="w-24 px-2 py-1 text-right text-xs border border-slate-200 rounded-lg bg-white" />
+            </div>
+            <div class="border-t border-slate-200 pt-2 flex justify-between text-sm font-black text-slate-900">
+              <span>Grand Total:</span>
+              <span id="po-calc-grandtotal" class="text-blue-600">$0.00</span>
+            </div>
+            <div class="border-t border-slate-200 pt-2 grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 mb-1">Paid Now ($)</label>
+                <input type="number" step="0.01" id="po-paid-input" value="0.00" oninput="calculatePoTotals()" class="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 mb-1">Payment Method</label>
+                <select id="po-method" class="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white">
+                  <option value="Bank">Bank Wire</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Mobile Money">Mobile Money</option>
+                  <option value="Credit">Credit Term</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex justify-between text-rose-600 font-bold pt-1">
+              <span>Remaining Vendor Debt:</span>
+              <span id="po-calc-remaining">$0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closePoModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
+          <button type="submit" id="submit-po-btn" class="px-6 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm">Confirm & Receive Inventory</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- VIEW PURCHASE ORDER DETAILS MODAL -->
+  <div id="view-po-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 id="view-po-num" class="text-base font-bold text-slate-900">Purchase Order</h3>
+          <p id="view-po-meta" class="text-xs text-slate-500"></p>
+        </div>
+        <button onclick="closeViewPoModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div id="view-po-body" class="mt-4 space-y-4">
+      </div>
+      <div class="pt-3 border-t border-slate-100 flex justify-end">
+        <button onclick="closeViewPoModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('purchases');
+
+    let currentPage = 1;
+    const limit = 15;
+    let cachedSuppliers = [];
+    let cachedWarehouses = [];
+    let cachedProducts = [];
+
+    async function initOptions() {
+      try {
+        const [supRes, whRes, prodRes] = await Promise.all([
+          API.get('/suppliers'),
+          API.get('/warehouses'),
+          API.get('/products', { limit: 100 })
+        ]);
+
+        cachedSuppliers = supRes.data || [];
+        cachedWarehouses = whRes.data || [];
+        cachedProducts = prodRes.data.products || [];
+
+        // Fill filter
+        document.getElementById('supplier-filter').innerHTML = '<option value="">All Suppliers</option>' + 
+          cachedSuppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+        document.getElementById('warehouse-filter').innerHTML = '<option value="">All Warehouses</option>' + 
+          cachedWarehouses.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+
+        // Fill modal
+        document.getElementById('po-supplier').innerHTML = cachedSuppliers.map(s => `<option value="${s.id}">${s.name} (${s.company || 'Vendor'})</option>`).join('');
+        document.getElementById('po-warehouse').innerHTML = cachedWarehouses.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadPurchases(page = 1) {
+      currentPage = page;
+      const search = document.getElementById('search-input').value.trim();
+      const supplier_id = document.getElementById('supplier-filter').value;
+      const warehouse_id = document.getElementById('warehouse-filter').value;
+      const payment_status = document.getElementById('status-filter').value;
+
+      try {
+        const res = await API.get('/purchases', { page, limit, search, supplier_id, warehouse_id, payment_status });
+        const { purchases, pagination } = res.data;
+        const tbody = document.getElementById('purchases-tbody');
+
+        if (purchases.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" class="px-5 py-8 text-center text-slate-400">No purchase records found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = purchases.map(p => {
+          const statusClass = p.payment_status === 'Paid' 
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+            : (p.payment_status === 'Partially Paid' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200');
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="px-5 py-3.5 font-bold text-slate-900">${p.invoice_number}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-800">${p.supplier_name || 'Vendor'}</td>
+              <td class="px-4 py-3.5 text-slate-600">${p.warehouse_name}</td>
+              <td class="px-4 py-3.5 text-slate-500">${p.purchase_date.slice(0, 10)}</td>
+              <td class="px-4 py-3.5 font-bold text-slate-900">${Auth.formatMoney(p.total)}</td>
+              <td class="px-4 py-3.5 text-emerald-600 font-semibold">${Auth.formatMoney(p.paid_amount)}</td>
+              <td class="px-4 py-3.5 text-rose-600 font-semibold">${Auth.formatMoney(p.remaining_amount)}</td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${p.payment_status}</span></td>
+              <td class="px-5 py-3.5 text-right">
+                <button onclick="viewPo(${p.id})" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold">
+                  View Order
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        document.getElementById('pagination-info').innerText = `Showing ${purchases.length} of ${pagination.total} purchase orders`;
+        document.getElementById('current-page-num').innerText = pagination.page;
+        document.getElementById('prev-page-btn').disabled = pagination.page <= 1;
+        document.getElementById('next-page-btn').disabled = pagination.page >= pagination.total_pages;
+
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    // Dynamic PO row handling
+    let poRowCounter = 0;
+    function addPoRow() {
+      poRowCounter++;
+      const tbody = document.getElementById('po-items-tbody');
+      const tr = document.createElement('tr');
+      tr.id = `po-row-${poRowCounter}`;
+      tr.className = 'po-row hover:bg-slate-50';
+
+      const prodOptions = cachedProducts.map(p => `<option value="${p.id}" data-cost="${p.purchase_price}">${p.name} (${p.sku})</option>`).join('');
+
+      tr.innerHTML = `
+        <td class="px-3 py-2">
+          <select class="po-prod-select w-full px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white" onchange="onProdSelectChange(${poRowCounter})">
+            <option value="">Select product...</option>
+            ${prodOptions}
+          </select>
+        </td>
+        <td class="px-3 py-2">
+          <input type="number" min="1" value="1" class="po-qty-input w-full px-2 py-1 text-xs border border-slate-200 rounded-lg" oninput="calculatePoTotals()" />
+        </td>
+        <td class="px-3 py-2">
+          <input type="number" step="0.01" min="0" value="0.00" class="po-cost-input w-full px-2 py-1 text-xs border border-slate-200 rounded-lg" oninput="calculatePoTotals()" />
+        </td>
+        <td class="px-3 py-2">
+          <input type="number" step="0.01" min="0" value="0.00" class="po-disc-input w-full px-2 py-1 text-xs border border-slate-200 rounded-lg" oninput="calculatePoTotals()" />
+        </td>
+        <td class="px-3 py-2 text-right font-bold text-slate-800 po-row-total">
+          $0.00
+        </td>
+        <td class="px-3 py-2 text-center">
+          <button type="button" onclick="document.getElementById('po-row-${poRowCounter}').remove(); calculatePoTotals();" class="text-rose-500 hover:text-rose-700">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </td>
+      `;
+
+      tbody.appendChild(tr);
+    }
+
+    function onProdSelectChange(rowId) {
+      const row = document.getElementById(`po-row-${rowId}`);
+      const select = row.querySelector('.po-prod-select');
+      const selectedOption = select.options[select.selectedIndex];
+      const cost = selectedOption.getAttribute('data-cost') || 0;
+      row.querySelector('.po-cost-input').value = parseFloat(cost).toFixed(2);
+      calculatePoTotals();
+    }
+
+    function calculatePoTotals() {
+      let subtotal = 0;
+      const rows = document.querySelectorAll('.po-row');
+
+      rows.forEach(row => {
+        const qty = parseFloat(row.querySelector('.po-qty-input').value) || 0;
+        const cost = parseFloat(row.querySelector('.po-cost-input').value) || 0;
+        const disc = parseFloat(row.querySelector('.po-disc-input').value) || 0;
+        const rowTotal = Math.max(0, (qty * cost) - disc);
+        row.querySelector('.po-row-total').innerText = Auth.formatMoney(rowTotal);
+        subtotal += (qty * cost);
+      });
+
+      const tax = parseFloat(document.getElementById('po-tax-input').value) || 0;
+      const overallDisc = parseFloat(document.getElementById('po-discount-input').value) || 0;
+      const grandTotal = Math.max(0, subtotal + tax - overallDisc);
+
+      const paid = parseFloat(document.getElementById('po-paid-input').value) || 0;
+      const remaining = Math.max(0, grandTotal - paid);
+
+      document.getElementById('po-calc-subtotal').innerText = Auth.formatMoney(subtotal);
+      document.getElementById('po-calc-grandtotal').innerText = Auth.formatMoney(grandTotal);
+      document.getElementById('po-calc-remaining').innerText = Auth.formatMoney(remaining);
+    }
+
+    // Modal Controls
+    const poModal = document.getElementById('po-modal');
+    document.getElementById('new-po-btn').addEventListener('click', () => {
+      document.getElementById('po-form').reset();
+      document.getElementById('po-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('po-items-tbody').innerHTML = '';
+      addPoRow();
+      calculatePoTotals();
+      poModal.classList.remove('hidden');
+    });
+
+    function closePoModal() {
+      poModal.classList.add('hidden');
+    }
+
+    document.getElementById('po-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const rows = document.querySelectorAll('.po-row');
+      const items = [];
+
+      rows.forEach(row => {
+        const prodId = row.querySelector('.po-prod-select').value;
+        const qty = parseInt(row.querySelector('.po-qty-input').value, 10);
+        const cost = parseFloat(row.querySelector('.po-cost-input').value);
+        const disc = parseFloat(row.querySelector('.po-disc-input').value) || 0;
+
+        if (prodId && qty > 0) {
+          items.push({
+            product_id: parseInt(prodId, 10),
+            quantity: qty,
+            purchase_price: cost,
+            discount: disc
+          });
+        }
+      });
+
+      if (items.length === 0) {
+        Toast.error('Please select at least one product with valid quantity');
+        return;
+      }
+
+      const payload = {
+        supplier_id: parseInt(document.getElementById('po-supplier').value, 10),
+        warehouse_id: parseInt(document.getElementById('po-warehouse').value, 10),
+        purchase_date: document.getElementById('po-date').value,
+        items,
+        tax: parseFloat(document.getElementById('po-tax-input').value) || 0,
+        discount: parseFloat(document.getElementById('po-discount-input').value) || 0,
+        paid_amount: parseFloat(document.getElementById('po-paid-input').value) || 0,
+        payment_method: document.getElementById('po-method').value,
+        notes: document.getElementById('po-notes').value.trim()
+      };
+
+      const btn = document.getElementById('submit-po-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Processing Transaction...';
+
+      try {
+        await API.post('/purchases', payload);
+        Toast.success('Purchase order created & stock received into warehouse!');
+        closePoModal();
+        loadPurchases(1);
+      } catch (err) {
+        Toast.error(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Confirm & Receive Inventory';
+      }
+    });
+
+    // View PO Details
+    const viewPoModal = document.getElementById('view-po-modal');
+    function closeViewPoModal() {
+      viewPoModal.classList.add('hidden');
+    }
+
+    async function viewPo(id) {
+      try {
+        const res = await API.get(`/purchases/${id}`);
+        const p = res.data;
+
+        document.getElementById('view-po-num').innerText = p.invoice_number;
+        document.getElementById('view-po-meta').innerText = `Supplier: ${p.supplier_name} | Warehouse: ${p.warehouse_name} | Date: ${p.purchase_date.slice(0, 10)}`;
+
+        const body = document.getElementById('view-po-body');
+        body.innerHTML = `
+          <div class="border border-slate-200 rounded-xl overflow-hidden">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                <tr>
+                  <th class="px-3 py-2">Item</th>
+                  <th class="px-3 py-2">Qty</th>
+                  <th class="px-3 py-2">Cost</th>
+                  <th class="px-3 py-2 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${p.items.map(i => `
+                  <tr>
+                    <td class="px-3 py-2 font-medium">${i.product_name} <span class="block text-[10px] text-slate-400 font-mono">${i.product_sku}</span></td>
+                    <td class="px-3 py-2">${i.quantity} ${i.product_unit}</td>
+                    <td class="px-3 py-2">${Auth.formatMoney(i.purchase_price)}</td>
+                    <td class="px-3 py-2 text-right font-bold text-slate-800">${Auth.formatMoney(i.total)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="p-3 bg-slate-50 rounded-xl space-y-1 text-xs">
+            <div class="flex justify-between"><span>Subtotal:</span> <span class="font-bold">${Auth.formatMoney(p.subtotal)}</span></div>
+            <div class="flex justify-between"><span>Tax:</span> <span>${Auth.formatMoney(p.tax)}</span></div>
+            <div class="flex justify-between"><span>Discount:</span> <span>${Auth.formatMoney(p.discount)}</span></div>
+            <div class="flex justify-between text-sm font-black border-t border-slate-200 pt-1"><span>Total:</span> <span class="text-blue-600">${Auth.formatMoney(p.total)}</span></div>
+            <div class="flex justify-between text-emerald-600 font-bold"><span>Paid:</span> <span>${Auth.formatMoney(p.paid_amount)}</span></div>
+            <div class="flex justify-between text-rose-600 font-bold"><span>Balance Owed:</span> <span>${Auth.formatMoney(p.remaining_amount)}</span></div>
+          </div>
+        `;
+
+        viewPoModal.classList.remove('hidden');
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    document.getElementById('search-input').addEventListener('input', () => loadPurchases(1));
+    document.getElementById('supplier-filter').addEventListener('change', () => loadPurchases(1));
+    document.getElementById('warehouse-filter').addEventListener('change', () => loadPurchases(1));
+    document.getElementById('status-filter').addEventListener('change', () => loadPurchases(1));
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await initOptions();
+      loadPurchases(1);
+    });
+  </script>
+</body>
+</html>

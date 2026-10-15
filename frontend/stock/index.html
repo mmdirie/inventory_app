@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock & Movements - Apex Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+</head>
+<body class="bg-slate-50">
+  <div id="app-layout">
+    
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Inventory & Stock Tracking</h1>
+        <p class="text-xs text-slate-500 mt-1">Real-time facility quantities, valuation, and complete movement audit history</p>
+      </div>
+      <div class="flex items-center space-x-3">
+        <a href="/adjustments/index.html" class="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-xl transition flex items-center">
+          <i class="fa-solid fa-sliders mr-2 text-slate-500"></i> Stock Adjustments
+        </a>
+        <a href="/transfers/index.html" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center">
+          <i class="fa-solid fa-truck-ramp-box mr-2"></i> Warehouse Transfers
+        </a>
+      </div>
+    </div>
+
+    <!-- TABS: 1. Current Stock Breakdown | 2. Movements Ledger -->
+    <div class="flex space-x-2 border-b border-slate-200 mb-6">
+      <button id="tab-overview-btn" onclick="switchTab('overview')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-blue-600 text-blue-600 flex items-center space-x-2">
+        <i class="fa-solid fa-boxes-stacked"></i> <span>Stock On Hand</span>
+      </button>
+      <button id="tab-movements-btn" onclick="switchTab('movements')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2">
+        <i class="fa-solid fa-clock-rotate-left"></i> <span>Movement Ledger</span>
+      </button>
+    </div>
+
+    <!-- TAB 1: STOCK ON HAND -->
+    <div id="tab-overview-panel">
+      <!-- Summary Valuation Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white p-4 rounded-xl border border-slate-200/80">
+          <span class="text-[11px] font-bold text-slate-400 uppercase">Total Inventory Units</span>
+          <div id="val-units" class="text-xl font-black text-slate-900 mt-1">0</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200/80">
+          <span class="text-[11px] font-bold text-slate-400 uppercase">Total Cost Value</span>
+          <div id="val-cost" class="text-xl font-black text-blue-600 mt-1">$0.00</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200/80">
+          <span class="text-[11px] font-bold text-slate-400 uppercase">Total Retail Value</span>
+          <div id="val-retail" class="text-xl font-black text-emerald-600 mt-1">$0.00</div>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200/80">
+          <span class="text-[11px] font-bold text-slate-400 uppercase">Low Stock Alerts</span>
+          <div id="val-low" class="text-xl font-black text-rose-600 mt-1">0 items</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-6 flex flex-col sm:flex-row gap-3">
+        <div class="flex-1 relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" id="stock-search" placeholder="Search product name, SKU, barcode..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <select id="stock-wh-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Warehouses</option>
+        </select>
+        <button id="toggle-low-stock-btn" onclick="toggleLowStockFilter()" class="px-3.5 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
+          <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1.5"></i> Low Stock Only
+        </button>
+      </div>
+
+      <!-- Table -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+              <tr>
+                <th class="px-5 py-3.5">Product & SKU</th>
+                <th class="px-4 py-3.5">Category</th>
+                <th class="px-4 py-3.5">Total Quantity</th>
+                <th class="px-4 py-3.5">Warehouse Distribution</th>
+                <th class="px-4 py-3.5">Cost Value</th>
+                <th class="px-4 py-3.5">Retail Value</th>
+                <th class="px-4 py-3.5">Status</th>
+              </tr>
+            </thead>
+            <tbody id="stock-tbody" class="divide-y divide-slate-100">
+              <tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">Loading stock inventory...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: MOVEMENTS LEDGER -->
+    <div id="tab-movements-panel" class="hidden">
+      <!-- Movement Filters -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-6 flex flex-col sm:flex-row gap-3">
+        <select id="movement-type-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Movement Types</option>
+          <option value="Purchase">Purchase (Stock In)</option>
+          <option value="Sale">Sale (Stock Out)</option>
+          <option value="Transfer">Transfer</option>
+          <option value="Adjustment">Adjustment</option>
+          <option value="Return">Return</option>
+          <option value="Opening Stock">Opening Stock</option>
+        </select>
+        <select id="movement-wh-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+          <option value="">All Warehouses</option>
+        </select>
+      </div>
+
+      <!-- Movement Table -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+              <tr>
+                <th class="px-5 py-3.5">Timestamp</th>
+                <th class="px-4 py-3.5">Product & SKU</th>
+                <th class="px-4 py-3.5">Facility</th>
+                <th class="px-4 py-3.5">Movement Type</th>
+                <th class="px-4 py-3.5">Quantity Change</th>
+                <th class="px-4 py-3.5">Staff User</th>
+                <th class="px-4 py-3.5">Reference & Notes</th>
+              </tr>
+            </thead>
+            <tbody id="movements-tbody" class="divide-y divide-slate-100">
+              <tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">Loading ledger...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('stock');
+
+    let isLowStockOnly = false;
+
+    // Check URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('low_stock') === 'true') {
+      isLowStockOnly = true;
+    }
+
+    function switchTab(tab) {
+      if (tab === 'overview') {
+        document.getElementById('tab-overview-btn').className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-blue-600 text-blue-600 flex items-center space-x-2';
+        document.getElementById('tab-movements-btn').className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2';
+        document.getElementById('tab-overview-panel').classList.remove('hidden');
+        document.getElementById('tab-movements-panel').classList.add('hidden');
+      } else {
+        document.getElementById('tab-movements-btn').className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-blue-600 text-blue-600 flex items-center space-x-2';
+        document.getElementById('tab-overview-btn').className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2';
+        document.getElementById('tab-movements-panel').classList.remove('hidden');
+        document.getElementById('tab-overview-panel').classList.add('hidden');
+        loadMovements();
+      }
+    }
+
+    function toggleLowStockFilter() {
+      isLowStockOnly = !isLowStockOnly;
+      const btn = document.getElementById('toggle-low-stock-btn');
+      if (isLowStockOnly) {
+        btn.className = 'px-3.5 py-2 border border-rose-300 bg-rose-50 rounded-xl text-xs font-bold text-rose-700 transition';
+      } else {
+        btn.className = 'px-3.5 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition';
+      }
+      loadStock();
+    }
+
+    async function initFilters() {
+      try {
+        const whRes = await API.get('/warehouses');
+        const whs = whRes.data || [];
+        const optHtml = '<option value="">All Warehouses</option>' + whs.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+        document.getElementById('stock-wh-filter').innerHTML = optHtml;
+        document.getElementById('movement-wh-filter').innerHTML = optHtml;
+      } catch (e) {}
+    }
+
+    async function loadStock() {
+      const search = document.getElementById('stock-search').value.trim();
+      const warehouse_id = document.getElementById('stock-wh-filter').value;
+      const params = { limit: 100, search, warehouse_id };
+      if (isLowStockOnly) params.low_stock = 'true';
+
+      try {
+        const res = await API.get('/stock', params);
+        const { summary, products } = res.data;
+
+        document.getElementById('val-units').innerText = Number(summary.total_quantity).toLocaleString();
+        document.getElementById('val-cost').innerText = Auth.formatMoney(summary.total_cost_value);
+        document.getElementById('val-retail').innerText = Auth.formatMoney(summary.total_retail_value);
+        document.getElementById('val-low').innerText = `${summary.low_stock_count} items`;
+
+        const tbody = document.getElementById('stock-tbody');
+        if (products.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">No inventory matching criteria.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = products.map(p => {
+          const isLow = p.current_stock <= p.min_stock_level;
+          const whPills = (p.warehouses || []).map(w => 
+            `<span class="inline-block px-1.5 py-0.5 mr-1 mb-1 rounded bg-slate-100 text-slate-700 text-[10px] font-medium border border-slate-200">${w.warehouse_name}: <strong>${w.quantity}</strong></span>`
+          ).join('');
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="px-5 py-3.5">
+                <div class="font-bold text-slate-900">${p.name}</div>
+                <div class="text-[11px] text-slate-400 font-mono">SKU: ${p.sku}</div>
+              </td>
+              <td class="px-4 py-3.5 text-slate-600">${p.category_name || '-'}</td>
+              <td class="px-4 py-3.5 font-black text-slate-900">${p.current_stock} ${p.unit}</td>
+              <td class="px-4 py-3.5 max-w-xs">${whPills || '<span class="text-slate-400">-</span>'}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-700">${Auth.formatMoney(p.total_cost_value)}</td>
+              <td class="px-4 py-3.5 font-bold text-emerald-600">${Auth.formatMoney(p.total_retail_value)}</td>
+              <td class="px-4 py-3.5">
+                ${isLow ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200">Low Stock Alert</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Sufficient</span>'}
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    async function loadMovements() {
+      const movement_type = document.getElementById('movement-type-filter').value;
+      const warehouse_id = document.getElementById('movement-wh-filter').value;
+
+      try {
+        const res = await API.get('/stock/movements', { limit: 50, movement_type, warehouse_id });
+        const list = res.data.movements || [];
+        const tbody = document.getElementById('movements-tbody');
+
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">No stock movements found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = list.map(m => {
+          const qty = Number(m.quantity);
+          const isPositive = qty > 0;
+          const qtyBadge = isPositive 
+            ? `<span class="font-bold text-emerald-600">+${qty} ${m.product_unit}</span>`
+            : `<span class="font-bold text-rose-600">${qty} ${m.product_unit}</span>`;
+
+          const typeColors = {
+            'Purchase': 'bg-blue-50 text-blue-700 border-blue-200',
+            'Sale': 'bg-purple-50 text-purple-700 border-purple-200',
+            'Transfer': 'bg-indigo-50 text-indigo-700 border-indigo-200',
+            'Adjustment': 'bg-amber-50 text-amber-700 border-amber-200',
+            'Return': 'bg-rose-50 text-rose-700 border-rose-200',
+            'Opening Stock': 'bg-slate-100 text-slate-700 border-slate-200'
+          };
+          const badgeClass = typeColors[m.movement_type] || 'bg-slate-100 text-slate-700';
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="px-5 py-3.5 text-slate-500 font-mono text-[11px]">${m.created_at.slice(0, 16).replace('T', ' ')}</td>
+              <td class="px-4 py-3.5">
+                <div class="font-bold text-slate-900">${m.product_name}</div>
+                <div class="text-[11px] text-slate-400 font-mono">${m.product_sku}</div>
+              </td>
+              <td class="px-4 py-3.5 text-slate-700 font-medium">${m.warehouse_name}</td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}">${m.movement_type}</span></td>
+              <td class="px-4 py-3.5">${qtyBadge}</td>
+              <td class="px-4 py-3.5 text-slate-600">${m.user_name || 'System'}</td>
+              <td class="px-4 py-3.5 text-slate-500 max-w-xs truncate">${m.notes || '-'}</td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (err) {
+        Toast.error(err.message);
+      }
+    }
+
+    document.getElementById('stock-search').addEventListener('input', () => loadStock());
+    document.getElementById('stock-wh-filter').addEventListener('change', () => loadStock());
+    document.getElementById('movement-type-filter').addEventListener('change', () => loadMovements());
+    document.getElementById('movement-wh-filter').addEventListener('change', () => loadMovements());
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await initFilters();
+      if (isLowStockOnly) {
+        document.getElementById('toggle-low-stock-btn').className = 'px-3.5 py-2 border border-rose-300 bg-rose-50 rounded-xl text-xs font-bold text-rose-700 transition';
+      }
+      loadStock();
+    });
+  </script>
+</body>
+</html>
