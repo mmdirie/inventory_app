@@ -144,6 +144,7 @@
   <script src="/js/toast.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/layout.js"></script>
+  <script src="/js/ui.js"></script>
   <script>
     Layout.init('stock');
 
@@ -185,7 +186,7 @@
       try {
         const whRes = await API.get('/warehouses');
         const whs = whRes.data || [];
-        const optHtml = '<option value="">All Warehouses</option>' + whs.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+        const optHtml = '<option value="">All Warehouses</option>' + whs.map(w => `<option value="${UI.escape(w.id)}">${UI.escape(w.name)}</option>`).join('');
         document.getElementById('stock-wh-filter').innerHTML = optHtml;
         document.getElementById('movement-wh-filter').innerHTML = optHtml;
       } catch (e) {}
@@ -215,17 +216,17 @@
         tbody.innerHTML = products.map(p => {
           const isLow = p.current_stock <= p.min_stock_level;
           const whPills = (p.warehouses || []).map(w => 
-            `<span class="inline-block px-1.5 py-0.5 mr-1 mb-1 rounded bg-slate-100 text-slate-700 text-[10px] font-medium border border-slate-200">${w.warehouse_name}: <strong>${w.quantity}</strong></span>`
+            `<span class="inline-block px-1.5 py-0.5 mr-1 mb-1 rounded bg-slate-100 text-slate-700 text-[10px] font-medium border border-slate-200">${UI.escape(w.warehouse_name)}: <strong>${UI.escape(w.quantity)}</strong></span>`
           ).join('');
 
           return `
             <tr class="hover:bg-slate-50/80 transition">
               <td class="px-5 py-3.5">
-                <div class="font-bold text-slate-900">${p.name}</div>
-                <div class="text-[11px] text-slate-400 font-mono">SKU: ${p.sku}</div>
+                <div class="font-bold text-slate-900">${UI.escape(p.name)}</div>
+                <div class="text-[11px] text-slate-400 font-mono">SKU: ${UI.escape(p.sku)}</div>
               </td>
-              <td class="px-4 py-3.5 text-slate-600">${p.category_name || '-'}</td>
-              <td class="px-4 py-3.5 font-black text-slate-900">${p.current_stock} ${p.unit}</td>
+              <td class="px-4 py-3.5 text-slate-600">${UI.escape(p.category_name || '-')}</td>
+              <td class="px-4 py-3.5 font-black text-slate-900">${UI.escape(p.current_stock)} ${UI.escape(p.unit)}</td>
               <td class="px-4 py-3.5 max-w-xs">${whPills || '<span class="text-slate-400">-</span>'}</td>
               <td class="px-4 py-3.5 font-medium text-slate-700">${Auth.formatMoney(p.total_cost_value)}</td>
               <td class="px-4 py-3.5 font-bold text-emerald-600">${Auth.formatMoney(p.total_retail_value)}</td>
@@ -259,8 +260,8 @@
           const qty = Number(m.quantity);
           const isPositive = qty > 0;
           const qtyBadge = isPositive 
-            ? `<span class="font-bold text-emerald-600">+${qty} ${m.product_unit}</span>`
-            : `<span class="font-bold text-rose-600">${qty} ${m.product_unit}</span>`;
+            ? `<span class="font-bold text-emerald-600">+${UI.escape(qty)} ${UI.escape(m.product_unit)}</span>`
+            : `<span class="font-bold text-rose-600">${UI.escape(qty)} ${UI.escape(m.product_unit)}</span>`;
 
           const typeColors = {
             'Purchase': 'bg-blue-50 text-blue-700 border-blue-200',
@@ -274,16 +275,16 @@
 
           return `
             <tr class="hover:bg-slate-50/80 transition">
-              <td class="px-5 py-3.5 text-slate-500 font-mono text-[11px]">${m.created_at.slice(0, 16).replace('T', ' ')}</td>
+              <td class="px-5 py-3.5 text-slate-500 font-mono text-[11px]">${UI.escape(m.created_at.slice(0, 16).replace('T', ' '))}</td>
               <td class="px-4 py-3.5">
-                <div class="font-bold text-slate-900">${m.product_name}</div>
-                <div class="text-[11px] text-slate-400 font-mono">${m.product_sku}</div>
+                <div class="font-bold text-slate-900">${UI.escape(m.product_name)}</div>
+                <div class="text-[11px] text-slate-400 font-mono">${UI.escape(m.product_sku)}</div>
               </td>
-              <td class="px-4 py-3.5 text-slate-700 font-medium">${m.warehouse_name}</td>
-              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}">${m.movement_type}</span></td>
+              <td class="px-4 py-3.5 text-slate-700 font-medium">${UI.escape(m.warehouse_name)}</td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}">${UI.escape(m.movement_type)}</span></td>
               <td class="px-4 py-3.5">${qtyBadge}</td>
-              <td class="px-4 py-3.5 text-slate-600">${m.user_name || 'System'}</td>
-              <td class="px-4 py-3.5 text-slate-500 max-w-xs truncate">${m.notes || '-'}</td>
+              <td class="px-4 py-3.5 text-slate-600">${UI.escape(m.user_name || 'System')}</td>
+              <td class="px-4 py-3.5 text-slate-500 max-w-xs truncate">${UI.escape(m.notes || '-')}</td>
             </tr>
           `;
         }).join('');

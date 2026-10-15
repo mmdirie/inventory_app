@@ -3,51 +3,87 @@ const path = require('path');
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
+const migrationsPath = path.join(__dirname, 'migrations');
+
+async function openDatabase() {
+  return mysql.createConnection({
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '3306', 10),
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'inventory_management',
+    multipleStatements: true
+  });
+}
+
+async function applyMigrations(connection) {
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version VARCHAR(190) NOT NULL PRIMARY KEY,
+      applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  const [lockRows] = await connection.query("SELECT GET_LOCK('inventory_app_schema_migrations', 30) AS acquired");
+  if (!lockRows[0] || Number(lockRows[0].acquired) !== 1) {
+    throw new Error('Could not acquire the database migration lock.');
+  }
+
+  try {
+    const migrationFiles = fs.readdirSync(migrationsPath)
+      .filter(file => /^\d+_[a-z0-9_-]+\.js$/i.test(file))
+      .sort();
+
+    for (const file of migrationFiles) {
+      const [applied] = await connection.execute('SELECT version FROM schema_migrations WHERE version = ?', [file]);
+      if (applied.length) continue;
+
+      const migration = require(path.join(migrationsPath, file));
+      if (!migration || typeof migration.up !== 'function') {
+        throw new Error(`Migration ${file} must export an up(connection) function.`);
+      }
+
+      console.log(`Applying ${file}...`);
+      await migration.up(connection);
+      await connection.execute('INSERT INTO schema_migrations (version) VALUES (?)', [file]);
+    }
+  } finally {
+    await connection.query("SELECT RELEASE_LOCK('inventory_app_schema_migrations')");
+  }
+}
+
 async function runMigration() {
-  console.log('--- Starting Database Migration ---');
-  
-  // Connect initially without database to ensure database exists
-  const rootConn = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '3306', 10),
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    multipleStatements: true
-  });
-
   const dbName = process.env.DB_NAME || 'inventory_management';
-  console.log(`Ensuring database "${dbName}" exists...`);
-  await rootConn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-  await rootConn.end();
+  if (!/^[a-zA-Z0-9_]+$/.test(dbName)) {
+    throw new Error('DB_NAME may contain only letters, numbers, and underscores.');
+  }
 
-  // Connect directly to the database with multipleStatements enabled
-  const dbConn = await mysql.createConnection({
+  const admin = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '3306', 10),
     user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: dbName,
-    multipleStatements: true
+    password: process.env.DB_PASSWORD || ''
   });
+  try {
+    await admin.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+  } finally {
+    await admin.end();
+  }
 
-  const schemaPath = path.join(__dirname, 'schema.sql');
-  const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-
-  console.log('Executing schema.sql...');
-  await dbConn.query(schemaSql);
-  console.log('Database tables successfully created!');
-
-  await dbConn.end();
-  console.log('--- Migration Completed Successfully ---');
+  const connection = await openDatabase();
+  try {
+    await applyMigrations(connection);
+    console.log('Database migrations completed successfully.');
+  } finally {
+    await connection.end();
+  }
 }
 
 if (require.main === module) {
-  runMigration()
-    .then(() => process.exit(0))
-    .catch((err) => {
-      console.error('Migration failed:', err);
-      process.exit(1);
-    });
+  runMigration().catch(err => {
+    console.error('Migration failed:', err);
+    process.exitCode = 1;
+  });
 }
 
-module.exports = runMigration;
+module.exports = { runMigration, applyMigrations };

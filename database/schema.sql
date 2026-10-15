@@ -4,38 +4,7 @@
 -- Target: MySQL / MariaDB (InnoDB Engine)
 -- ========================================================
 
-SET FOREIGN_KEY_CHECKS = 0;
-
--- 1. USERS & ROLES
-DROP TABLE IF EXISTS audit_logs;
-DROP TABLE IF EXISTS return_items;
-DROP TABLE IF EXISTS `returns`;
-DROP TABLE IF EXISTS stock_adjustments;
-DROP TABLE IF EXISTS stock_transfer_items;
-DROP TABLE IF EXISTS stock_transfers;
-DROP TABLE IF EXISTS expenses;
-DROP TABLE IF EXISTS payments;
-DROP TABLE IF EXISTS debts;
-DROP TABLE IF EXISTS invoices;
-DROP TABLE IF EXISTS sale_items;
-DROP TABLE IF EXISTS sales;
-DROP TABLE IF EXISTS purchase_items;
-DROP TABLE IF EXISTS purchases;
-DROP TABLE IF EXISTS stock_movements;
-DROP TABLE IF EXISTS warehouse_stock;
-DROP TABLE IF EXISTS products;
-DROP TABLE IF EXISTS customers;
-DROP TABLE IF EXISTS suppliers;
-DROP TABLE IF EXISTS warehouses;
-DROP TABLE IF EXISTS brands;
-DROP TABLE IF EXISTS categories;
-DROP TABLE IF EXISTS settings;
-DROP TABLE IF EXISTS role_permissions;
-DROP TABLE IF EXISTS permissions;
-DROP TABLE IF EXISTS users;
-
-SET FOREIGN_KEY_CHECKS = 1;
-
+-- Fresh-database schema only. Existing databases are managed by versioned migrations.
 -- Table: users
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -368,7 +337,7 @@ CREATE TABLE debts (
 CREATE TABLE payments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     reference_number VARCHAR(100) NOT NULL UNIQUE,
-    payment_type ENUM('Customer Sale', 'Customer Debt', 'Supplier Purchase', 'Supplier Debt', 'Expense') NOT NULL,
+    payment_type ENUM('Customer Sale', 'Customer Debt', 'Supplier Purchase', 'Supplier Debt', 'Customer Refund', 'Supplier Refund', 'Standalone', 'Expense') NOT NULL,
     party_type ENUM('Customer', 'Supplier', 'Expense', 'Other') NOT NULL,
     party_id INT DEFAULT NULL,
     party_name VARCHAR(150) DEFAULT NULL,
@@ -466,6 +435,7 @@ CREATE TABLE `returns` (
     warehouse_id INT NOT NULL,
     return_date DATE NOT NULL,
     refund_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+    request_key VARCHAR(100) DEFAULT NULL,
     reason TEXT NOT NULL,
     created_by INT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -473,6 +443,7 @@ CREATE TABLE `returns` (
     FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL,
     FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE RESTRICT,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    UNIQUE KEY uq_returns_request_key (request_key),
     INDEX idx_ret_num (return_number),
     INDEX idx_ret_type (return_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -504,4 +475,11 @@ CREATE TABLE audit_logs (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_audit_module (module),
     INDEX idx_audit_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE document_sequences (
+    sequence_name VARCHAR(40) NOT NULL,
+    sequence_year SMALLINT NOT NULL,
+    last_value BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (sequence_name, sequence_year)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -83,6 +83,9 @@
           <option value="Customer Debt">Customer Debt</option>
           <option value="Supplier Purchase">Supplier Purchase</option>
           <option value="Supplier Debt">Supplier Debt</option>
+          <option value="Customer Refund">Customer Refund</option>
+          <option value="Supplier Refund">Supplier Refund</option>
+          <option value="Standalone">Standalone</option>
           <option value="Expense">Expense</option>
         </select>
         <!-- Party Type -->
@@ -176,6 +179,7 @@
               <option value="Customer Debt">Customer Debt</option>
               <option value="Supplier Purchase">Supplier Purchase</option>
               <option value="Supplier Debt">Supplier Debt</option>
+              <option value="Standalone">Standalone</option>
               <option value="Expense">Expense</option>
             </select>
           </div>
@@ -189,6 +193,11 @@
               <option value="Other">Other</option>
             </select>
           </div>
+        </div>
+
+        <div id="payment-reference-wrap" class="hidden">
+          <label class="block text-xs font-bold text-slate-700 mb-1">Debt / Transaction ID <span class="text-rose-500">*</span></label>
+          <input type="number" min="1" id="modal-reference-id" placeholder="Enter the linked debt, sale, or purchase ID" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
         </div>
 
         <!-- Dynamic Party Selection -->
@@ -259,6 +268,7 @@
   <script src="/js/toast.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/layout.js"></script>
+  <script src="/js/ui.js"></script>
   <script>
     Layout.init('payments');
 
@@ -338,19 +348,19 @@
         }
 
         tbody.innerHTML = payments.map(p => {
-          const notesText = p.notes ? `<span class="text-slate-500 truncate max-w-[120px] block" title="${p.notes}">${p.notes}</span>` : '<span class="text-slate-300">—</span>';
-          const byText = p.created_by_name ? `<span class="text-slate-600">${p.created_by_name}</span>` : '<span class="text-slate-300">—</span>';
+          const notesText = p.notes ? `<span class="text-slate-500 truncate max-w-[120px] block" title="${UI.escape(p.notes)}">${UI.escape(p.notes)}</span>` : '<span class="text-slate-300">—</span>';
+          const byText = p.created_by_name ? `<span class="text-slate-600">${UI.escape(p.created_by_name)}</span>` : '<span class="text-slate-300">—</span>';
           const partyText = p.party_name
-            ? `<div class="font-medium text-slate-800">${p.party_name}</div><div class="text-[10px] text-slate-400">${p.party_type || ''}</div>`
+            ? `<div class="font-medium text-slate-800">${UI.escape(p.party_name)}</div><div class="text-[10px] text-slate-400">${UI.escape(p.party_type || '')}</div>`
             : `<span class="text-slate-300">—</span>`;
 
           return `
             <tr class="hover:bg-slate-50/80 transition">
               <td class="px-5 py-3.5">
-                <span class="font-mono font-bold text-slate-800 text-[11px]">${p.reference_number || '—'}</span>
+                <span class="font-mono font-bold text-slate-800 text-[11px]">${UI.escape(p.reference_number || '—')}</span>
               </td>
               <td class="px-4 py-3.5">
-                <span class="text-slate-700 font-medium">${p.payment_type || '—'}</span>
+                <span class="text-slate-700 font-medium">${UI.escape(p.payment_type || '—')}</span>
               </td>
               <td class="px-4 py-3.5">${partyText}</td>
               <td class="px-4 py-3.5">
@@ -367,7 +377,7 @@
         updatePagination(pagination);
 
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="8" class="px-5 py-10 text-center text-rose-400"><i class="fa-solid fa-triangle-exclamation mr-2"></i>${err.message || 'Failed to load payments.'}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="px-5 py-10 text-center text-rose-400"><i class="fa-solid fa-triangle-exclamation mr-2"></i>${UI.escape(err.message || 'Failed to load payments.')}</td></tr>`;
         Toast.error(err.message || 'Failed to load payments.');
       }
     }
@@ -393,11 +403,11 @@
 
         const custSel = document.getElementById('modal-customer-select');
         custSel.innerHTML = '<option value="">Select customer...</option>' +
-          cachedCustomers.map(c => `<option value="${c.id}" data-name="${c.name}">${c.name}${c.balance !== undefined ? ` (Bal: ${fmt(c.balance)})` : ''}</option>`).join('');
+          cachedCustomers.map(c => `<option value="${UI.escape(c.id)}" data-name="${UI.escape(c.name)}">${UI.escape(c.name)}${c.balance !== undefined ? ` (Bal: ${fmt(c.balance)})` : ''}</option>`).join('');
 
         const supSel = document.getElementById('modal-supplier-select');
         supSel.innerHTML = '<option value="">Select supplier...</option>' +
-          cachedSuppliers.map(s => `<option value="${s.id}" data-name="${s.name}">${s.name}${s.balance !== undefined ? ` (Bal: ${fmt(s.balance)})` : ''}</option>`).join('');
+          cachedSuppliers.map(s => `<option value="${UI.escape(s.id)}" data-name="${UI.escape(s.name)}">${UI.escape(s.name)}${s.balance !== undefined ? ` (Bal: ${fmt(s.balance)})` : ''}</option>`).join('');
 
       } catch (err) {
         console.error('Party load error:', err);
@@ -414,6 +424,9 @@
 
     function openModal() {
       paymentForm.reset();
+      document.getElementById('modal-reference-id').value = '';
+      document.getElementById('payment-reference-wrap').classList.add('hidden');
+      document.getElementById('modal-reference-id').required = false;
       document.getElementById('modal-date').value = new Date().toISOString().slice(0, 10);
       custWrap.classList.add('hidden');
       supWrap.classList.add('hidden');
@@ -436,6 +449,12 @@
       document.getElementById('modal-customer-select').value = '';
       document.getElementById('modal-supplier-select').value = '';
       document.getElementById('modal-party-name-input').value = '';
+    });
+
+    document.getElementById('modal-payment-type').addEventListener('change', event => {
+      const linked = ['Customer Sale', 'Customer Debt', 'Supplier Purchase', 'Supplier Debt'].includes(event.target.value);
+      document.getElementById('payment-reference-wrap').classList.toggle('hidden', !linked);
+      document.getElementById('modal-reference-id').required = linked;
     });
 
     document.getElementById('record-payment-btn').addEventListener('click', openModal);
@@ -482,6 +501,7 @@
         party_type:     partyType,
         party_id:       partyId,
         party_name:     partyName,
+        reference_id:   document.getElementById('modal-reference-id').value || undefined,
         amount,
         payment_method: document.getElementById('modal-method').value,
         payment_date:   document.getElementById('modal-date').value,

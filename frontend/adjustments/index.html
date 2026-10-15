@@ -111,6 +111,7 @@
   <script src="/js/toast.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/layout.js"></script>
+  <script src="/js/ui.js"></script>
   <script>
     Layout.init('adjustments');
 
@@ -127,8 +128,8 @@
         cachedWarehouses = whRes.data || [];
         cachedProducts = prodRes.data.products || [];
 
-        document.getElementById('adj-wh').innerHTML = cachedWarehouses.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
-        document.getElementById('adj-prod').innerHTML = cachedProducts.map(p => `<option value="${p.id}">${p.name} (${p.sku})</option>`).join('');
+        document.getElementById('adj-wh').innerHTML = cachedWarehouses.map(w => `<option value="${UI.escape(w.id)}">${UI.escape(w.name)}</option>`).join('');
+        document.getElementById('adj-prod').innerHTML = cachedProducts.map(p => `<option value="${UI.escape(p.id)}">${UI.escape(p.name)} (${UI.escape(p.sku)})</option>`).join('');
       } catch (e) {}
     }
 
@@ -167,21 +168,21 @@
 
         tbody.innerHTML = list.map(a => `
           <tr class="hover:bg-slate-50/80 transition">
-            <td class="px-5 py-3.5 font-bold text-slate-900">${a.adjustment_number}</td>
-            <td class="px-4 py-3.5 font-medium text-slate-800">${a.product_name} <span class="block text-[10px] text-slate-400 font-mono">${a.product_sku}</span></td>
-            <td class="px-4 py-3.5 text-slate-700">${a.warehouse_name}</td>
+            <td class="px-5 py-3.5 font-bold text-slate-900">${UI.escape(a.adjustment_number)}</td>
+            <td class="px-4 py-3.5 font-medium text-slate-800">${UI.escape(a.product_name)} <span class="block text-[10px] text-slate-400 font-mono">${UI.escape(a.product_sku)}</span></td>
+            <td class="px-4 py-3.5 text-slate-700">${UI.escape(a.warehouse_name)}</td>
             <td class="px-4 py-3.5">
               <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${a.adjustment_type === 'Increase' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}">
-                ${a.adjustment_type}
+                ${UI.escape(a.adjustment_type)}
               </span>
             </td>
             <td class="px-4 py-3.5 font-bold ${a.adjustment_type === 'Increase' ? 'text-emerald-600' : 'text-rose-600'}">
-              ${a.adjustment_type === 'Increase' ? '+' : '-'}${a.adjustment_quantity} ${a.product_unit}
+              ${a.adjustment_type === 'Increase' ? '+' : '-'}${UI.escape(a.adjustment_quantity)} ${UI.escape(a.product_unit)}
             </td>
-            <td class="px-4 py-3.5 font-black text-slate-900">${a.new_quantity} ${a.product_unit}</td>
-            <td class="px-4 py-3.5 text-slate-600">${a.created_by_name || 'System'}</td>
-            <td class="px-4 py-3.5 text-slate-600 max-w-xs truncate">${a.reason}</td>
-            <td class="px-5 py-3.5 text-right text-slate-500 font-mono">${a.adjustment_date.slice(0, 10)}</td>
+            <td class="px-4 py-3.5 font-black text-slate-900">${UI.escape(a.new_quantity)} ${UI.escape(a.product_unit)}</td>
+            <td class="px-4 py-3.5 text-slate-600">${UI.escape(a.created_by_name || 'System')}</td>
+            <td class="px-4 py-3.5 text-slate-600 max-w-xs truncate">${UI.escape(a.reason)}</td>
+            <td class="px-5 py-3.5 text-right text-slate-500 font-mono">${UI.escape(a.adjustment_date.slice(0, 10))}</td>
           </tr>
         `).join('');
 

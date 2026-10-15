@@ -115,6 +115,7 @@
   <script src="/js/toast.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/layout.js"></script>
+  <script src="/js/ui.js"></script>
   <script>
     Layout.init('sales');
 
@@ -127,7 +128,7 @@
         const whRes = await API.get('/warehouses');
         const whs = whRes.data || [];
         document.getElementById('warehouse-filter').innerHTML = '<option value="">All Warehouses</option>' + 
-          whs.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+          whs.map(w => `<option value="${UI.escape(w.id)}">${UI.escape(w.name)}</option>`).join('');
       } catch (err) {}
     }
 
@@ -155,15 +156,15 @@
 
           return `
             <tr class="hover:bg-slate-50/80 transition">
-              <td class="px-5 py-3.5 font-bold text-slate-900">${s.invoice_number}</td>
-              <td class="px-4 py-3.5 font-medium text-slate-800">${s.customer_name}</td>
-              <td class="px-4 py-3.5 text-slate-600">${s.warehouse_name}</td>
-              <td class="px-4 py-3.5 text-slate-500">${s.sale_date.slice(0, 10)}</td>
-              <td class="px-4 py-3.5 font-medium text-slate-700">${s.payment_method}</td>
+              <td class="px-5 py-3.5 font-bold text-slate-900">${UI.escape(s.invoice_number)}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-800">${UI.escape(s.customer_name)}</td>
+              <td class="px-4 py-3.5 text-slate-600">${UI.escape(s.warehouse_name)}</td>
+              <td class="px-4 py-3.5 text-slate-500">${UI.escape(s.sale_date.slice(0, 10))}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-700">${UI.escape(s.payment_method)}</td>
               <td class="px-4 py-3.5 font-black text-slate-900">${Auth.formatMoney(s.total)}</td>
               <td class="px-4 py-3.5 text-emerald-600 font-bold">${Auth.formatMoney(s.paid_amount)}</td>
               <td class="px-4 py-3.5 text-rose-600 font-bold">${Auth.formatMoney(s.remaining_amount)}</td>
-              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${s.payment_status}</span></td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${UI.escape(s.payment_status)}</span></td>
               <td class="px-5 py-3.5 text-right">
                 <button onclick="viewSaleDetails(${s.id})" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold">
                   Invoice
@@ -200,10 +201,10 @@
         const body = document.getElementById('modal-sale-body');
         body.innerHTML = `
           <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 grid grid-cols-2 gap-2 text-xs">
-            <div><span class="text-slate-400 block font-medium">Customer</span> <span class="font-bold">${s.customer_name}</span></div>
-            <div><span class="text-slate-400 block font-medium">Payment Mode</span> <span class="font-bold">${s.payment_method}</span></div>
-            <div><span class="text-slate-400 block font-medium">Fulfillment Warehouse</span> <span class="font-bold">${s.warehouse_name}</span></div>
-            <div><span class="text-slate-400 block font-medium">Cashier / Staff</span> <span class="font-bold">${s.created_by_name || 'System'}</span></div>
+            <div><span class="text-slate-400 block font-medium">Customer</span> <span class="font-bold">${UI.escape(s.customer_name)}</span></div>
+                <div><span class="text-slate-400 block font-medium">Payment Mode</span> <span class="font-bold">${UI.escape(s.payment_method)}</span></div>
+                <div><span class="text-slate-400 block font-medium">Fulfillment Warehouse</span> <span class="font-bold">${UI.escape(s.warehouse_name)}</span></div>
+                <div><span class="text-slate-400 block font-medium">Cashier / Staff</span> <span class="font-bold">${UI.escape(s.created_by_name || 'System')}</span></div>
           </div>
 
           <div class="border border-slate-200 rounded-xl overflow-hidden">

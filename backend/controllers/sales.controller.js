@@ -2,6 +2,23 @@ const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
 const { validateRequired } = require('../validators/input.validator');
+const { nextDocumentNumber } = require('../utils/document-number');
+
+function parseAmount(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const text = String(value).trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text)) return null;
+  const amount = Number(text);
+  return Number.isFinite(amount) && amount <= 9999999999999.99 ? amount : null;
+}
+
+function parseQuantity(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const text = String(value).trim();
+  if (!/^[1-9]\d*$/.test(text)) return null;
+  const quantity = Number(text);
+  return Number.isSafeInteger(quantity) && quantity <= 2147483647 ? quantity : null;
+}
 
 /**
  * GET /api/sales
@@ -177,9 +194,20 @@ async function createSale(req, res, next) {
       await conn.rollback();
       return error(res, 'At least one item is required in the sale cart', 400);
     }
+    if (!['Cash', 'Bank', 'Mobile Money', 'Credit', 'Other'].includes(payment_method)) {
+      await conn.rollback();
+      return error(res, 'Invalid sale payment method', 400);
+    }
 
     // Verify warehouse
-    const [warehouseRows] = await conn.execute('SELECT * FROM warehouses WHERE id = ?', [warehouse_id]);
+    if (!Number.isSafeInteger(Number(warehouse_id)) || Number(warehouse_id) <= 0) {
+      await conn.rollback();
+      return error(res, 'Invalid warehouse ID', 400);
+    }
+    const [warehouseRows] = await conn.execute(
+      "SELECT id FROM warehouses WHERE id = ? AND status = 'active' FOR UPDATE",
+      [warehouse_id]
+    );
     if (warehouseRows.length === 0) {
       await conn.rollback();
       return error(res, 'Warehouse not found', 404);
@@ -188,53 +216,58 @@ async function createSale(req, res, next) {
     // Customer resolution (allow null for walk-in cash customer)
     let customer = null;
     if (customer_id) {
-      const [custRows] = await conn.execute('SELECT * FROM customers WHERE id = ?', [customer_id]);
-      if (custRows.length > 0) {
-        customer = custRows[0];
+      if (!Number.isSafeInteger(Number(customer_id)) || Number(customer_id) <= 0) {
+        await conn.rollback();
+        return error(res, 'Invalid customer ID', 400);
       }
+      const [custRows] = await conn.execute(
+        "SELECT * FROM customers WHERE id = ? AND status = 'active' FOR UPDATE",
+        [customer_id]
+      );
+      if (custRows.length === 0) {
+        await conn.rollback();
+        return error(res, 'Customer not found or inactive', 404);
+      }
+      customer = custRows[0];
     }
 
-    // 1. Stock Check & Validation to PREVENT OVERSELLING
+    // Lock product rows in a stable order so concurrent sales serialize, even when
+    // a warehouse_stock row has not yet been created for a product.
     let subtotal = 0;
+    let itemDiscountTotal = 0;
+    let itemTaxTotal = 0;
     const validatedItems = [];
+    const requestedByProduct = new Map();
 
     for (const item of items) {
-      const qty = parseInt(item.quantity, 10);
-      const price = parseFloat(item.unit_price);
-      const itemDisc = parseFloat(item.discount || 0);
-      const itemTax = parseFloat(item.tax || 0);
+      const qty = parseQuantity(item.quantity);
+      const price = parseAmount(item.unit_price);
+      const itemDisc = parseAmount(item.discount === undefined ? 0 : item.discount);
+      const itemTax = parseAmount(item.tax === undefined ? 0 : item.tax);
 
-      if (!item.product_id || isNaN(qty) || qty <= 0 || isNaN(price) || price < 0) {
+      if (!Number.isSafeInteger(Number(item.product_id)) || Number(item.product_id) <= 0 ||
+          qty === null || price === null || itemDisc === null || itemTax === null ||
+          price > 9999999999.99 || itemDisc > 9999999999.99 || itemTax > 9999999999.99 ||
+          itemDisc > qty * price || !Number.isFinite(qty * price) || qty * price > 9999999999999.99) {
         await conn.rollback();
-        return error(res, 'Invalid quantity or unit price for one or more items', 400);
+        return error(res, 'Invalid quantity, price, discount, or tax for one or more items', 400);
       }
 
-      // Check warehouse stock with FOR UPDATE lock
-      const [stockRows] = await conn.execute(`
-        SELECT ws.quantity, p.name, p.current_stock
-        FROM warehouse_stock ws
-        JOIN products p ON ws.product_id = p.id
-        WHERE ws.warehouse_id = ? AND ws.product_id = ?
-        FOR UPDATE
-      `, [warehouse_id, item.product_id]);
-
-      const availableInWh = stockRows.length > 0 ? stockRows[0].quantity : 0;
-      const productName = stockRows.length > 0 ? stockRows[0].name : `Product #${item.product_id}`;
-
-      if (availableInWh < qty) {
+      const productId = Number(item.product_id);
+      const combinedQuantity = (requestedByProduct.get(productId) || 0) + qty;
+      if (!Number.isSafeInteger(combinedQuantity) || combinedQuantity > 2147483647) {
         await conn.rollback();
-        return error(
-          res,
-          `Insufficient stock for "${productName}" in the selected warehouse. Requested: ${qty}, Available: ${availableInWh}`,
-          400
-        );
+        return error(res, 'Combined product quantity exceeds the supported limit', 400);
       }
+      requestedByProduct.set(productId, combinedQuantity);
 
-      const itemTotal = (qty * price) - itemDisc + itemTax;
+      const itemTotal = Number(((qty * price) - itemDisc + itemTax).toFixed(2));
       subtotal += (qty * price);
+      itemDiscountTotal += itemDisc;
+      itemTaxTotal += itemTax;
 
       validatedItems.push({
-        product_id: item.product_id,
+        product_id: productId,
         quantity: qty,
         unit_price: price,
         discount: itemDisc,
@@ -243,16 +276,61 @@ async function createSale(req, res, next) {
       });
     }
 
-    const discountVal = parseFloat(discount) || 0;
-    const taxVal = parseFloat(tax) || 0;
-    const grandTotal = Math.max(0, subtotal - discountVal + taxVal);
-    const paidVal = Math.min(grandTotal, Math.max(0, parseFloat(paid_amount) || 0));
+    const productIds = [...requestedByProduct.keys()].sort((a, b) => a - b);
+    const [products] = await conn.execute(
+      `SELECT id, name, status FROM products WHERE id IN (${productIds.map(() => '?').join(',')}) ORDER BY id FOR UPDATE`,
+      productIds
+    );
+    if (products.length !== productIds.length || products.some(product => product.status !== 'active')) {
+      await conn.rollback();
+      return error(res, 'One or more products do not exist or are inactive', 400);
+    }
+
+    const [stockRows] = await conn.execute(`
+      SELECT product_id, quantity FROM warehouse_stock
+      WHERE warehouse_id = ? AND product_id IN (${productIds.map(() => '?').join(',')})
+      ORDER BY product_id FOR UPDATE
+    `, [warehouse_id, ...productIds]);
+    const availableByProduct = new Map(stockRows.map(row => [Number(row.product_id), Number(row.quantity)]));
+    for (const product of products) {
+      const requested = requestedByProduct.get(Number(product.id));
+      const available = availableByProduct.get(Number(product.id)) || 0;
+      if (available < requested) {
+        await conn.rollback();
+        return error(
+          res,
+          `Insufficient stock for "${product.name}" in the selected warehouse. Requested: ${requested}, Available: ${available}`,
+          400
+        );
+      }
+    }
+
+    const requestedDiscount = parseAmount(discount);
+    const requestedTax = parseAmount(tax);
+    const paidVal = parseAmount(paid_amount);
+    if (requestedDiscount === null || requestedTax === null || paidVal === null ||
+        requestedDiscount + itemDiscountTotal > subtotal) {
+      await conn.rollback();
+      return error(res, 'Sale discount, tax, or payment amount is invalid', 400);
+    }
+    subtotal = Number(subtotal.toFixed(2));
+    const discountVal = Number((requestedDiscount + itemDiscountTotal).toFixed(2));
+    const taxVal = Number((requestedTax + itemTaxTotal).toFixed(2));
+    const grandTotal = Number((subtotal - discountVal + taxVal).toFixed(2));
+    if (paidVal > grandTotal) {
+      await conn.rollback();
+      return error(res, 'Sale discount, tax, or payment amount is invalid', 400);
+    }
     const remainingVal = Math.max(0, grandTotal - paidVal);
 
     // If remaining > 0, customer MUST be identified
     if (remainingVal > 0 && !customer) {
       await conn.rollback();
       return error(res, 'Credit or partial payment sales require selecting an identified customer', 400);
+    }
+    if (remainingVal > 0 && Number(customer.balance) + remainingVal > Number(customer.credit_limit)) {
+      await conn.rollback();
+      return error(res, 'This sale would exceed the customer credit limit', 400);
     }
 
     let paymentStatus = 'Unpaid';
@@ -266,12 +344,7 @@ async function createSale(req, res, next) {
     const [settings] = await conn.execute('SELECT invoice_prefix FROM settings LIMIT 1');
     const prefix = settings.length > 0 ? settings[0].invoice_prefix : 'INV-';
     const year = new Date().getFullYear();
-    const [maxSale] = await conn.execute(
-      "SELECT COUNT(*) as cnt FROM sales WHERE invoice_number LIKE ?",
-      [`${prefix}${year}-%`]
-    );
-    const seq = String(maxSale[0].cnt + 1).padStart(4, '0');
-    const invoiceNumber = `${prefix}${year}-${seq}`;
+    const invoiceNumber = await nextDocumentNumber(conn, 'sale', prefix);
 
     const userId = req.user ? req.user.id : null;
 

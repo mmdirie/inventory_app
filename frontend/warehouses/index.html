@@ -109,6 +109,7 @@
   <script src="/js/toast.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/layout.js"></script>
+  <script src="/js/ui.js"></script>
   <script>
     Layout.init('warehouses');
 
@@ -132,25 +133,25 @@
                   <i class="fa-solid fa-warehouse"></i>
                 </div>
                 <div class="truncate">
-                  <h3 class="text-sm font-bold text-slate-900 truncate">${w.name}</h3>
-                  <div class="text-[11px] text-slate-500 truncate"><i class="fa-solid fa-location-dot mr-1 text-slate-400"></i>${w.location}</div>
+                  <h3 class="text-sm font-bold text-slate-900 truncate">${UI.escape(w.name)}</h3>
+                  <div class="text-[11px] text-slate-500 truncate"><i class="fa-solid fa-location-dot mr-1 text-slate-400"></i>${UI.escape(w.location)}</div>
                 </div>
               </div>
 
               <div class="grid grid-cols-2 gap-3 my-4 p-3 bg-slate-50/80 rounded-xl border border-slate-100 text-xs">
                 <div>
                   <span class="text-slate-400 block text-[10px] uppercase font-semibold">Stocked SKUs</span>
-                  <span class="font-black text-slate-900 text-sm">${w.total_products} items</span>
+                  <span class="font-black text-slate-900 text-sm">${UI.escape(w.total_products)} items</span>
                 </div>
                 <div>
                   <span class="text-slate-400 block text-[10px] uppercase font-semibold">Total In-Hand Units</span>
-                  <span class="font-black text-blue-600 text-sm">${w.total_units} units</span>
+                  <span class="font-black text-blue-600 text-sm">${UI.escape(w.total_units)} units</span>
                 </div>
               </div>
 
               <div class="text-xs text-slate-600 space-y-1 mb-4">
-                <div><span class="text-slate-400 font-medium">Manager:</span> ${w.manager || 'Unassigned'}</div>
-                <div><span class="text-slate-400 font-medium">Phone:</span> ${w.phone || 'N/A'}</div>
+                <div><span class="text-slate-400 font-medium">Manager:</span> ${UI.escape(w.manager || 'Unassigned')}</div>
+                <div><span class="text-slate-400 font-medium">Phone:</span> ${UI.escape(w.phone || 'N/A')}</div>
               </div>
             </div>
 
@@ -162,7 +163,7 @@
                 <button onclick="editWarehouse(${w.id})" class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100">
                   <i class="fa-solid fa-pen-to-square"></i>
                 </button>
-                <button onclick="deleteWarehouse(${w.id}, '${w.name.replace(/'/g, "\\'")}')" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100">
+                <button onclick="deleteWarehouse(${w.id}, this.dataset.name)" data-name="${UI.escape(w.name)}" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100">
                   <i class="fa-solid fa-trash-can"></i>
                 </button>
               </div>
@@ -264,9 +265,9 @@
         } else {
           tbody.innerHTML = w.stock.map(s => `
             <tr class="hover:bg-slate-50">
-              <td class="px-4 py-2.5 font-bold text-slate-900">${s.product_name} <span class="block text-[10px] text-slate-400 font-mono font-normal">SKU: ${s.sku}</span></td>
-              <td class="px-4 py-2.5 text-slate-600">${s.category_name || '-'}</td>
-              <td class="px-4 py-2.5 text-right font-black text-slate-900">${s.quantity} ${s.unit}</td>
+              <td class="px-4 py-2.5 font-bold text-slate-900">${UI.escape(s.product_name)} <span class="block text-[10px] text-slate-400 font-mono font-normal">SKU: ${UI.escape(s.sku)}</span></td>
+              <td class="px-4 py-2.5 text-slate-600">${UI.escape(s.category_name || '-')}</td>
+              <td class="px-4 py-2.5 text-right font-black text-slate-900">${UI.escape(s.quantity)} ${UI.escape(s.unit)}</td>
             </tr>
           `).join('');
         }

@@ -45,7 +45,35 @@ async function runSeed() {
     multipleStatements: true
   });
 
+  let lockAcquired = false;
+  let transactionStarted = false;
   try {
+    const [lockRows] = await connection.query("SELECT GET_LOCK('inventory_app_seed', 30) AS acquired");
+    lockAcquired = Boolean(lockRows[0] && Number(lockRows[0].acquired) === 1);
+    if (!lockAcquired) {
+      throw new Error('Could not acquire the database seed lock.');
+    }
+
+    const protectedTables = [
+      'users', 'permissions', 'role_permissions', 'settings', 'warehouses', 'categories', 'brands', 'suppliers',
+      'customers', 'products', 'warehouse_stock', 'stock_movements', 'purchases',
+      'purchase_items', 'sales', 'sale_items', 'invoices', 'debts', 'payments',
+      'expenses', 'stock_transfers', 'stock_transfer_items', 'stock_adjustments',
+      'returns', 'return_items', 'audit_logs'
+    ];
+    for (const table of protectedTables) {
+      const [rows] = await connection.query(`SELECT 1 FROM \`${table}\` LIMIT 1`);
+      if (rows.length) {
+        throw new Error(
+          `Seeding refused because ${table} already contains data. ` +
+          'Seed is only for a fresh database and never replaces existing business data.'
+        );
+      }
+    }
+
+    await connection.beginTransaction();
+    transactionStarted = true;
+
     // 1. Roles & Permissions
     console.log('Inserting Permissions & Role mappings...');
     const permissions = [
@@ -475,10 +503,18 @@ async function runSeed() {
       );
     }
 
+    await connection.commit();
+    transactionStarted = false;
     console.log('--- Database Seeding Completed Successfully! ---');
   } catch (err) {
+    if (transactionStarted) {
+      await connection.rollback();
+    }
     throw err;
   } finally {
+    if (lockAcquired) {
+      await connection.query("SELECT RELEASE_LOCK('inventory_app_seed')");
+    }
     await connection.end();
   }
 }

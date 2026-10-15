@@ -2,6 +2,7 @@ const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
 const { validateRequired } = require('../validators/input.validator');
+const { nextDocumentNumber } = require('../utils/document-number');
 
 /**
  * GET /api/transfers
@@ -142,12 +143,7 @@ async function createTransfer(req, res, next) {
       return error(res, 'At least one item is required for stock transfer', 400);
     }
 
-    const year = new Date().getFullYear();
-    const [countRow] = await conn.execute(
-      "SELECT COUNT(*) as cnt FROM stock_transfers WHERE transfer_number LIKE ?",
-      [`TRF-${year}-%`]
-    );
-    const transferNumber = `TRF-${year}-${String(countRow[0].cnt + 1).padStart(4, '0')}`;
+    const transferNumber = await nextDocumentNumber(conn, 'transfer', 'TRF-');
     const initialStatus = auto_complete ? 'Completed' : 'Pending';
     const userId = req.user ? req.user.id : null;
 

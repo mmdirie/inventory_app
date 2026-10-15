@@ -117,6 +117,7 @@
   <script src="/js/toast.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/layout.js"></script>
+  <script src="/js/ui.js"></script>
   <script>
     Layout.init('transfers');
 
@@ -132,7 +133,7 @@
         cachedWarehouses = whRes.data || [];
         cachedProducts = prodRes.data.products || [];
 
-        const whOptions = cachedWarehouses.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+        const whOptions = cachedWarehouses.map(w => `<option value="${UI.escape(w.id)}">${UI.escape(w.name)}</option>`).join('');
         document.getElementById('tr-source').innerHTML = whOptions;
         document.getElementById('tr-dest').innerHTML = whOptions;
         if (cachedWarehouses.length > 1) {
@@ -163,12 +164,12 @@
 
           return `
             <tr class="hover:bg-slate-50/80 transition">
-              <td class="px-5 py-3.5 font-bold text-slate-900">${t.transfer_number}</td>
-              <td class="px-4 py-3.5 font-medium text-slate-800">${t.source_warehouse_name}</td>
-              <td class="px-4 py-3.5 font-medium text-slate-800">${t.destination_warehouse_name}</td>
-              <td class="px-4 py-3.5 text-slate-500">${t.transfer_date.slice(0, 10)}</td>
-              <td class="px-4 py-3.5 font-black text-slate-900">${t.total_units} units</td>
-              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}">${t.status}</span></td>
+              <td class="px-5 py-3.5 font-bold text-slate-900">${UI.escape(t.transfer_number)}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-800">${UI.escape(t.source_warehouse_name)}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-800">${UI.escape(t.destination_warehouse_name)}</td>
+              <td class="px-4 py-3.5 text-slate-500">${UI.escape(t.transfer_date.slice(0, 10))}</td>
+              <td class="px-4 py-3.5 font-black text-slate-900">${UI.escape(t.total_units)} units</td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}">${UI.escape(t.status)}</span></td>
               <td class="px-5 py-3.5 text-right space-x-2">
                 ${t.status === 'Pending' ? `
                   <button onclick="updateTransferStatus(${t.id}, 'Completed')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold">
@@ -195,7 +196,7 @@
       tr.id = `tr-row-${trRowCounter}`;
       tr.className = 'tr-row hover:bg-slate-50';
 
-      const prodOptions = cachedProducts.map(p => `<option value="${p.id}">${p.name} (${p.unit})</option>`).join('');
+      const prodOptions = cachedProducts.map(p => `<option value="${UI.escape(p.id)}">${UI.escape(p.name)} (${UI.escape(p.unit)})</option>`).join('');
 
       tr.innerHTML = `
         <td class="px-3 py-2">

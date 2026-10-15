@@ -304,6 +304,7 @@
 <script src="/js/toast.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/layout.js"></script>
+<script src="/js/ui.js"></script>
 <script>Layout.init('expenses');</script>
 
 <script>
@@ -398,13 +399,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const categoryBadge = (cat) => {
     const cfg = CATEGORY_CONFIG[cat] || CATEGORY_CONFIG['Other'];
     return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}">
-              <i class="${cfg.icon} text-[10px]"></i>${cat || 'Other'}
+              <i class="${cfg.icon} text-[10px]"></i>${UI.escape(cat || 'Other')}
             </span>`;
   };
 
   const paymentBadge = (pm) => {
     const cls = PAYMENT_CONFIG[pm] || PAYMENT_CONFIG['Other'];
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${pm || '—'}</span>`;
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${UI.escape(pm || '—')}</span>`;
   };
 
   const activeFiltersText = () => {
@@ -463,20 +464,20 @@ document.addEventListener('DOMContentLoaded', () => {
             <td class="px-4 py-3 text-slate-400 font-mono text-xs">${rowNum}</td>
             <td class="px-4 py-3">${categoryBadge(exp.category)}</td>
             <td class="px-4 py-3 text-slate-700 max-w-xs">
-              <div class="font-medium truncate">${exp.description || '—'}</div>
-              ${exp.notes ? `<div class="text-xs text-slate-400 truncate mt-0.5">${exp.notes}</div>` : ''}
+              <div class="font-medium truncate">${UI.escape(exp.description || '—')}</div>
+              ${exp.notes ? `<div class="text-xs text-slate-400 truncate mt-0.5">${UI.escape(exp.notes)}</div>` : ''}
             </td>
             <td class="px-4 py-3 text-right font-semibold text-slate-800">${fmt(exp.amount)}</td>
             <td class="px-4 py-3">${paymentBadge(exp.payment_method)}</td>
             <td class="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">${fmtDate(exp.expense_date)}</td>
-            <td class="px-4 py-3 text-slate-500 text-xs">${exp.created_by_name || '—'}</td>
+            <td class="px-4 py-3 text-slate-500 text-xs">${UI.escape(exp.created_by_name || '—')}</td>
             <td class="px-4 py-3">
               <div class="flex items-center justify-center gap-2">
                 <button data-id="${exp.id}" class="btn-edit text-blue-600 hover:text-blue-800 text-sm transition" title="Edit"
-                  data-expense='${JSON.stringify(exp).replace(/'/g, "&apos;")}'>
+                  data-expense='${UI.escape(JSON.stringify(exp))}'>
                   <i class="fa-solid fa-pen-to-square"></i>
                 </button>
-                <button data-id="${exp.id}" data-desc="${(exp.description || '').replace(/"/g, '&quot;')}"
+                <button data-id="${UI.escape(exp.id)}" data-desc="${UI.escape(exp.description || '')}"
                   class="btn-delete text-red-500 hover:text-red-700 text-sm transition" title="Delete">
                   <i class="fa-solid fa-trash"></i>
                 </button>
@@ -569,7 +570,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const delBtn  = e.target.closest('.btn-delete');
 
     if (editBtn) {
-      const exp = JSON.parse(editBtn.getAttribute('data-expense').replace(/&apos;/g, "'"));
+      const exp = JSON.parse(editBtn.dataset.expense);
       formId.value        = exp.id;
       formCategory.value  = exp.category  || '';
       formDesc.value      = exp.description || '';

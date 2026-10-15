@@ -134,6 +134,7 @@
   <script src="/js/toast.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/layout.js"></script>
+  <script src="/js/ui.js"></script>
   <script>
     Layout.init('suppliers');
 
@@ -159,22 +160,22 @@
           return `
             <tr class="hover:bg-slate-50/80 transition">
               <td class="px-5 py-3.5">
-                <div class="font-bold text-slate-900">${s.name}</div>
-                <div class="text-[11px] text-slate-400">${s.company || 'Direct Supplier'}</div>
+                <div class="font-bold text-slate-900">${UI.escape(s.name)}</div>
+                <div class="text-[11px] text-slate-400">${UI.escape(s.company || 'Direct Supplier')}</div>
               </td>
               <td class="px-4 py-3.5">
-                <div class="text-slate-800 font-medium">${s.phone || '-'}</div>
-                <div class="text-[11px] text-slate-400">${s.email || '-'}</div>
+                <div class="text-slate-800 font-medium">${UI.escape(s.phone || '-')}</div>
+                <div class="text-[11px] text-slate-400">${UI.escape(s.email || '-')}</div>
               </td>
-              <td class="px-4 py-3.5 text-slate-600">${s.city || ''} ${s.country ? `(${s.country})` : ''}</td>
-              <td class="px-4 py-3.5 font-bold text-slate-700">${s.total_purchases_count} orders</td>
+              <td class="px-4 py-3.5 text-slate-600">${UI.escape(s.city || '')} ${s.country ? `(${UI.escape(s.country)})` : ''}</td>
+              <td class="px-4 py-3.5 font-bold text-slate-700">${UI.escape(s.total_purchases_count)} orders</td>
               <td class="px-4 py-3.5">${balanceBadge}</td>
-              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}">${s.status}</span></td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}">${UI.escape(s.status)}</span></td>
               <td class="px-5 py-3.5 text-right space-x-2">
                 <button onclick="editSupplier(${s.id})" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100">
                   <i class="fa-solid fa-pen-to-square"></i>
                 </button>
-                <button onclick="deleteSupplier(${s.id}, '${s.name.replace(/'/g, "\\'")}')" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100">
+                <button onclick="deleteSupplier(${s.id}, this.dataset.name)" data-name="${UI.escape(s.name)}" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100">
                   <i class="fa-solid fa-trash-can"></i>
                 </button>
               </td>

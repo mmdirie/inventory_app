@@ -289,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
       'Paid':          'bg-green-100 text-green-700',
     };
     const cls = map[status] || 'bg-slate-100 text-slate-600';
-    return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}">${status}</span>`;
+    return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}">${escapeHTML(status)}</span>`;
   }
 
   // ─── Type Badge ──────────────────────────────────────────────────────
@@ -300,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
       : 'bg-purple-100 text-purple-700';
     const icon = isCustomer ? 'fa-user' : 'fa-truck';
     return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}">
-              <i class="fa-solid ${icon} text-[10px]"></i>${type}
+              <i class="fa-solid ${icon} text-[10px]"></i>${escapeHTML(type)}
             </span>`;
   }
 

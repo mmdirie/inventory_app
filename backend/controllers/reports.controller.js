@@ -231,7 +231,7 @@ async function getInventoryReports(req, res, next) {
         COALESCE(SUM(current_stock), 0) as total_stock_units,
         COALESCE(SUM(current_stock * purchase_price), 0) as total_cost_value,
         COALESCE(SUM(current_stock * selling_price), 0) as total_retail_value,
-        COALESCE(SUM(current_stock * (selling_price - purchase_price)), 0) as total_potential_profit
+        COALESCE(SUM(current_stock * (selling_price - purchase_price)), 0) as estimated_current_inventory_price_spread
       FROM products
       WHERE status = 'active'
     `);
@@ -326,13 +326,13 @@ async function getFinancialReports(req, res, next) {
     const totalRevenue = Number(salesRow.total_sales);
     const totalExpenses = Number(expRow.total_expenses);
     const totalPurchases = Number(purchRow.total_purchases);
-    const netProfit = totalRevenue - (totalExpenses + totalPurchases);
-
     return success(res, {
       revenue: totalRevenue,
       expenses: totalExpenses,
       purchases: totalPurchases,
-      net_profit: netProfit,
+      profit: null,
+      profit_status: 'unavailable',
+      profit_note: 'Profit is not calculated: sale lines do not store historical cost, so current product purchase prices cannot reliably represent cost of goods sold.',
       collected_cash: Number(salesRow.collected),
       disbursed_purchases: Number(purchRow.paid_purchases),
       customer_debt_receivable: Number(custDebt.total),
