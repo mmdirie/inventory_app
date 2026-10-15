@@ -7,63 +7,519 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="/css/custom.css" />
+  <!-- JsBarcode for client-side barcode generation -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <style>
+    @media print {
+      body * { visibility: hidden !important; }
+      #printable-sheet, #printable-sheet * { visibility: visible !important; }
+      #printable-sheet {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: #fff;
+        padding: 20px;
+        display: block !important;
+      }
+      .no-print { display: none !important; }
+    }
+    .barcode-label {
+      width: 60mm;
+      height: 38mm;
+      border: 1px dashed #cbd5e1;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      text-align: center;
+      background: #ffffff;
+      box-sizing: border-box;
+      page-break-inside: avoid;
+    }
+  </style>
 </head>
-<body class="bg-slate-50">
+<body class="bg-slate-50 text-slate-900">
   <div id="app-layout">
-    <div class="mb-6">
-      <h1 class="text-2xl font-black text-slate-900">Barcode Manager</h1>
-      <p class="text-xs text-slate-500 mt-1">Look up an active product by barcode or SKU, or generate a barcode candidate.</p>
+    <div class="p-6 space-y-6">
+
+      <!-- Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-black text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-barcode text-blue-600"></i>
+            Barcode Manager
+          </h1>
+          <p class="text-xs text-slate-500 mt-1">Look up products, generate standard barcodes, and print batch product stickers.</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="border-b border-slate-200">
+        <nav class="flex gap-2">
+          <button id="tab-lookup-btn" onclick="switchTab('lookup')" class="tab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-blue-600 text-blue-600 flex items-center gap-2">
+            <i class="fa-solid fa-magnifying-glass"></i> Scanner & Lookup
+          </button>
+          <button id="tab-generator-btn" onclick="switchTab('generator')" class="tab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Barcode Generator
+          </button>
+          <button id="tab-batch-btn" onclick="switchTab('batch')" class="tab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-print"></i> Batch Label Print
+          </button>
+        </nav>
+      </div>
+
+      <!-- TAB 1: LOOKUP / SCANNER -->
+      <div id="tab-lookup" class="space-y-6">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm max-w-3xl">
+          <h2 class="text-sm font-bold text-slate-800 mb-2">Scan or Enter Product Code</h2>
+          <form id="lookup-form" class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <i class="fa-solid fa-barcode absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+              <input id="lookup-code" required autocomplete="off" autofocus placeholder="Scan barcode with scanner gun or type SKU..." class="w-full pl-10 pr-4 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+            <button type="submit" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-magnifying-glass"></i> Find Product
+            </button>
+            <button type="button" id="suggest-btn" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-dice"></i> Suggest Code
+            </button>
+          </form>
+        </div>
+
+        <div id="lookup-result" class="max-w-3xl"></div>
+      </div>
+
+      <!-- TAB 2: BARCODE GENERATOR -->
+      <div id="tab-generator" class="hidden space-y-6 max-w-3xl">
+        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-5">
+          <div>
+            <h2 class="text-sm font-bold text-slate-800">Generate Custom Product Barcode</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Select an existing catalog product or type any code to generate live barcodes.</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Pick Existing Product</label>
+              <select id="gen-prod-select" onchange="onSelectGenProduct()" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500">
+                <option value="">-- Or enter custom code below --</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Barcode Format</label>
+              <select id="gen-format" onchange="renderLiveBarcode()" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 font-medium">
+                <option value="CODE128">Code 128 (Alphanumeric - Recommended)</option>
+                <option value="EAN13">EAN-13 (13 Digits)</option>
+                <option value="UPC">UPC (12 Digits)</option>
+                <option value="CODE39">Code 39</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Barcode Value / Number</label>
+              <div class="flex gap-2">
+                <input id="gen-val" value="789012345678" oninput="renderLiveBarcode()" class="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono" />
+                <button onclick="fillSuggestedBarcode()" type="button" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl" title="Generate Valid Candidate">
+                  <i class="fa-solid fa-arrows-rotate"></i>
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Label Subtext (Product Name / Price)</label>
+              <input id="gen-label-text" value="Apex Standard Product - $24.99" oninput="renderLiveBarcode()" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+          </div>
+
+          <!-- Preview Box -->
+          <div class="p-6 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col items-center justify-center min-h-[160px]">
+            <div id="barcode-container" class="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm flex flex-col items-center">
+              <svg id="live-barcode-svg"></svg>
+              <p id="live-subtext" class="text-[11px] font-bold text-slate-700 mt-1"></p>
+            </div>
+            <div class="flex gap-3 mt-4">
+              <button onclick="printSingleBarcode()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-2">
+                <i class="fa-solid fa-print"></i> Print This Label
+              </button>
+              <button onclick="copyBarcodeVal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-2">
+                <i class="fa-solid fa-copy"></i> Copy Value
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: BATCH LABEL PRINT -->
+      <div id="tab-batch" class="hidden space-y-6">
+        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 class="text-sm font-bold text-slate-800">Batch Barcode Label Generator</h2>
+              <p class="text-xs text-slate-500 mt-0.5">Select products and print standard adhesive label sheets for shelf tags or product packaging.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="toggleSelectAllBatch(true)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg">Select All</button>
+              <button onclick="toggleSelectAllBatch(false)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg">Deselect</button>
+              <button onclick="generateBatchSheet()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-2">
+                <i class="fa-solid fa-table-cells"></i> Generate Sheet (<span id="batch-count-selected">0</span>)
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto max-h-[420px] overflow-y-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold sticky top-0 border-b border-slate-200">
+                <tr>
+                  <th class="p-3 w-10 text-center"><input type="checkbox" id="master-batch-chk" onchange="toggleSelectAllBatch(this.checked)" class="rounded" /></th>
+                  <th class="p-3">Product Name</th>
+                  <th class="p-3">SKU</th>
+                  <th class="p-3">Barcode</th>
+                  <th class="p-3">Price</th>
+                  <th class="p-3 w-28">Label Copies</th>
+                </tr>
+              </thead>
+              <tbody id="batch-products-tbody" class="divide-y divide-slate-100">
+                <tr><td colspan="6" class="p-6 text-center text-slate-400">Loading catalog products...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Printable Container (visible on print or sheet preview) -->
+        <div id="batch-preview-wrapper" class="hidden bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+          <div class="flex items-center justify-between border-b pb-3">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Generated Barcode Sheet</h3>
+              <p class="text-xs text-slate-500">Preview of printable labels grid</p>
+            </div>
+            <button onclick="window.print()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-2">
+              <i class="fa-solid fa-print"></i> Print Labels Now
+            </button>
+          </div>
+
+          <div id="printable-sheet" class="flex flex-wrap gap-3 justify-start p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <!-- Labels generated dynamically -->
+          </div>
+        </div>
+      </div>
+
     </div>
-    <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm max-w-3xl">
-      <form id="lookup-form" class="flex flex-col sm:flex-row gap-3">
-        <input id="lookup-code" required autocomplete="off" autofocus placeholder="Scan or enter barcode / SKU" class="flex-1 px-4 py-3 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        <button class="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl"><i class="fa-solid fa-magnifying-glass mr-2"></i>Find Product</button>
-        <button type="button" id="suggest-btn" class="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl">Suggest Barcode</button>
-      </form>
-    </section>
-    <section id="product-result" class="mt-5 max-w-3xl"></section>
   </div>
-  <script src="/js/api.js"></script><script src="/js/toast.js"></script><script src="/js/auth.js"></script><script src="/js/layout.js"></script><script src="/js/ui.js"></script>
+
+  <!-- Shared Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
   <script>
     Layout.init('barcode');
-    const result = document.getElementById('product-result');
-    document.getElementById('lookup-form').addEventListener('submit', async event => {
-      event.preventDefault();
+
+    let cachedProducts = [];
+
+    function switchTab(tab) {
+      ['lookup', 'generator', 'batch'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.add('hidden');
+        const btn = document.getElementById(`tab-${t}-btn`);
+        btn.classList.remove('border-blue-600', 'text-blue-600');
+        btn.classList.add('border-transparent', 'text-slate-500');
+      });
+
+      document.getElementById(`tab-${tab}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab-${tab}-btn`);
+      activeBtn.classList.remove('border-transparent', 'text-slate-500');
+      activeBtn.classList.add('border-blue-600', 'text-blue-600');
+
+      if (tab === 'generator') {
+        renderLiveBarcode();
+      }
+    }
+
+    // ── TAB 1: LOOKUP ────────────────────────────────────────────────────────
+    const lookupForm = document.getElementById('lookup-form');
+    const lookupResult = document.getElementById('lookup-result');
+
+    lookupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
       const code = document.getElementById('lookup-code').value.trim();
       if (!code) return;
-      result.innerHTML = '<div class="bg-white rounded-2xl border border-slate-200 p-6 text-sm text-slate-500">Searching…</div>';
+
+      lookupResult.innerHTML = '<div class="bg-white p-6 rounded-2xl border text-center text-xs text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Searching catalog...</div>';
+
       try {
-        const response = await API.get(`/barcode/lookup/${encodeURIComponent(code)}`);
-        const product = response.data;
-        const stock = Array.isArray(product.warehouse_stock) ? product.warehouse_stock : [];
-        result.innerHTML = `
-          <article class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div><p class="text-xs uppercase tracking-wide font-bold text-blue-600">${UI.escape(product.sku)}</p><h2 class="text-xl font-black text-slate-900 mt-1">${UI.escape(product.name)}</h2></div>
-              <span class="px-3 py-1 rounded-full text-xs font-bold ${product.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}">${UI.escape(product.status)}</span>
+        const res = await API.get(`/barcode/lookup/${encodeURIComponent(code)}`);
+        const p = res.data;
+        const stockRows = Array.isArray(p.warehouse_stock) ? p.warehouse_stock : [];
+
+        lookupResult.innerHTML = `
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <div class="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+              <div>
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 uppercase tracking-wider">${p.sku}</span>
+                <h2 class="text-lg font-black text-slate-900 mt-1">${p.name}</h2>
+                <p class="text-xs text-slate-500">${p.category_name || 'General'} · ${p.brand_name || 'No Brand'}</p>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-bold uppercase text-slate-400">Retail Price</span>
+                <p class="text-xl font-black text-emerald-600">$${parseFloat(p.selling_price).toFixed(2)}</p>
+              </div>
             </div>
-            <div class="grid sm:grid-cols-3 gap-4 mt-6 text-sm">
-              <div><p class="text-xs text-slate-500">Barcode</p><p class="font-semibold">${UI.escape(product.barcode)}</p></div>
-              <div><p class="text-xs text-slate-500">Category / Brand</p><p class="font-semibold">${UI.escape(product.category_name || '—')} / ${UI.escape(product.brand_name || '—')}</p></div>
-              <div><p class="text-xs text-slate-500">Current stock</p><p class="font-semibold">${UI.escape(product.current_stock)} ${UI.escape(product.unit)}</p></div>
-              <div><p class="text-xs text-slate-500">Selling price</p><p class="font-semibold">${UI.money(product.selling_price)}</p></div>
-              <div><p class="text-xs text-slate-500">Default warehouse</p><p class="font-semibold">${UI.escape(product.default_warehouse_name || '—')}</p></div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div class="p-3 bg-slate-50 rounded-xl">
+                <span class="text-slate-400 block text-[10px] uppercase font-bold">Barcode</span>
+                <span class="font-mono font-bold text-slate-800">${p.barcode}</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl">
+                <span class="text-slate-400 block text-[10px] uppercase font-bold">Total Stock</span>
+                <span class="font-bold text-slate-800">${p.current_stock} ${p.unit}</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl">
+                <span class="text-slate-400 block text-[10px] uppercase font-bold">Min Level</span>
+                <span class="font-bold text-slate-800">${p.min_stock_level} ${p.unit}</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl">
+                <span class="text-slate-400 block text-[10px] uppercase font-bold">Status</span>
+                <span class="font-bold capitalize ${p.status === 'active' ? 'text-emerald-600' : 'text-slate-500'}">${p.status}</span>
+              </div>
             </div>
-            <h3 class="text-sm font-bold text-slate-800 mt-6 mb-2">Stock by warehouse</h3>
-            ${stock.length ? `<div class="divide-y divide-slate-100">${stock.map(row => `<div class="py-2 flex justify-between text-sm"><span>${UI.escape(row.warehouse_name)}</span><span class="font-semibold">${UI.escape(row.quantity)}</span></div>`).join('')}</div>` : '<p class="text-sm text-slate-500">No warehouse stock recorded.</p>'}
-          </article>`;
-      } catch (error) {
-        result.innerHTML = `<div class="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-700">${UI.escape(error.message)}</div>`;
+
+            <!-- SVG Barcode for this product -->
+            <div class="p-4 bg-slate-50 rounded-xl flex flex-col items-center justify-center">
+              <svg id="lookup-barcode-svg"></svg>
+            </div>
+
+            <div class="border-t pt-3">
+              <h4 class="text-xs font-bold text-slate-700 mb-2">Warehouse Breakdown</h4>
+              <div class="divide-y divide-slate-100 text-xs">
+                ${stockRows.length ? stockRows.map(w => `
+                  <div class="py-2 flex justify-between items-center">
+                    <span class="text-slate-600">${w.warehouse_name}</span>
+                    <span class="font-bold text-slate-900">${w.quantity} ${p.unit}</span>
+                  </div>
+                `).join('') : '<p class="text-slate-400 text-xs py-2">No individual warehouse distribution logged.</p>'}
+              </div>
+            </div>
+          </div>
+        `;
+
+        try {
+          JsBarcode("#lookup-barcode-svg", p.barcode || p.sku, {
+            format: "CODE128",
+            width: 1.8,
+            height: 48,
+            displayValue: true,
+            fontSize: 12
+          });
+        } catch (svgErr) {
+          console.warn("Barcode rendering fallback:", svgErr);
+        }
+
+      } catch (err) {
+        lookupResult.innerHTML = `
+          <div class="bg-rose-50 border border-rose-200 rounded-xl p-4 text-xs text-rose-700 flex items-center gap-2">
+            <i class="fa-solid fa-circle-exclamation text-base"></i>
+            <span>${err.message || 'Product not found'}</span>
+          </div>
+        `;
       }
     });
-    document.getElementById('suggest-btn').addEventListener('click', async () => {
+
+    document.getElementById('suggest-btn').addEventListener('click', fillSuggestedBarcode);
+
+    async function fillSuggestedBarcode() {
       try {
-        const response = await API.get('/barcode/generate-suggested');
-        document.getElementById('lookup-code').value = response.data.barcode;
-        Toast.success(`Suggested barcode: ${response.data.barcode}`);
-      } catch (error) {
-        Toast.error(error.message);
+        const res = await API.get('/barcode/generate-suggested');
+        const code = res.data.barcode;
+        document.getElementById('lookup-code').value = code;
+        document.getElementById('gen-val').value = code;
+        renderLiveBarcode();
+        Toast.success(`Suggested unique barcode: ${code}`);
+      } catch (err) {
+        Toast.error('Could not generate barcode candidate');
       }
+    }
+
+    // ── TAB 2: GENERATOR ─────────────────────────────────────────────────────
+    function onSelectGenProduct() {
+      const prodId = document.getElementById('gen-prod-select').value;
+      if (!prodId) return;
+      const prod = cachedProducts.find(p => p.id == prodId);
+      if (prod) {
+        document.getElementById('gen-val').value = prod.barcode || prod.sku;
+        document.getElementById('gen-label-text').value = `${prod.name} - $${parseFloat(prod.selling_price).toFixed(2)}`;
+        renderLiveBarcode();
+      }
+    }
+
+    function renderLiveBarcode() {
+      const val = document.getElementById('gen-val').value.trim();
+      const format = document.getElementById('gen-format').value;
+      const subtext = document.getElementById('gen-label-text').value.trim();
+      document.getElementById('live-subtext').innerText = subtext;
+
+      if (!val) return;
+
+      try {
+        JsBarcode("#live-barcode-svg", val, {
+          format: format,
+          width: 2,
+          height: 60,
+          displayValue: true,
+          fontSize: 14,
+          font: "monospace"
+        });
+      } catch (err) {
+        console.warn('JsBarcode format mismatch:', err);
+      }
+    }
+
+    function copyBarcodeVal() {
+      const val = document.getElementById('gen-val').value.trim();
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(val);
+        Toast.success('Barcode copied to clipboard!');
+      }
+    }
+
+    function printSingleBarcode() {
+      const val = document.getElementById('gen-val').value.trim();
+      const subtext = document.getElementById('gen-label-text').value.trim();
+      const printWin = window.open('', '_blank');
+      printWin.document.write(`
+        <html>
+        <head>
+          <title>Print Label</title>
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+          <style>
+            body { margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; font-family: sans-serif; }
+            .label { width: 60mm; height: 38mm; border: 1px solid #ccc; padding: 6px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+            .title { font-size: 11px; font-weight: bold; margin-top: 4px; }
+          </style>
+        </head>
+        <body onload="window.print(); window.close();">
+          <div class="label">
+            <svg id="print-svg"></svg>
+            <div class="title">${subtext}</div>
+          </div>
+          <script>
+            JsBarcode("#print-svg", "${val}", { format: "CODE128", width: 1.8, height: 45, displayValue: true, fontSize: 12 });
+          <\/script>
+        </body>
+        </html>
+      `);
+      printWin.document.close();
+    }
+
+    // ── TAB 3: BATCH LABEL PRINT ─────────────────────────────────────────────
+    async function loadCatalogProducts() {
+      try {
+        const res = await API.get('/products', { limit: 100, status: 'active' });
+        cachedProducts = res.data.products || [];
+
+        // Fill generator select
+        const genSelect = document.getElementById('gen-prod-select');
+        genSelect.innerHTML = '<option value="">-- Choose from catalog or enter custom below --</option>' + 
+          cachedProducts.map(p => `<option value="${p.id}">${p.name} (${p.sku})</option>`).join('');
+
+        // Fill batch table
+        const tbody = document.getElementById('batch-products-tbody');
+        if (!cachedProducts.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">No active products found in catalog.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = cachedProducts.map((p, idx) => `
+          <tr class="hover:bg-slate-50/80 transition">
+            <td class="p-3 text-center">
+              <input type="checkbox" class="batch-chk rounded" data-id="${p.id}" onchange="updateBatchCount()" />
+            </td>
+            <td class="p-3 font-semibold text-slate-900">${p.name}</td>
+            <td class="p-3 font-mono text-slate-600">${p.sku}</td>
+            <td class="p-3 font-mono font-bold text-slate-800">${p.barcode || '—'}</td>
+            <td class="p-3 font-bold text-emerald-600">$${parseFloat(p.selling_price).toFixed(2)}</td>
+            <td class="p-3">
+              <input type="number" min="1" max="100" value="1" id="batch-qty-${p.id}" class="w-16 px-2 py-1 text-xs border border-slate-200 rounded-lg text-center" />
+            </td>
+          </tr>
+        `).join('');
+
+        updateBatchCount();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function toggleSelectAllBatch(checked) {
+      document.querySelectorAll('.batch-chk').forEach(c => c.checked = checked);
+      document.getElementById('master-batch-chk').checked = checked;
+      updateBatchCount();
+    }
+
+    function updateBatchCount() {
+      const selected = document.querySelectorAll('.batch-chk:checked').length;
+      document.getElementById('batch-count-selected').innerText = selected;
+    }
+
+    function generateBatchSheet() {
+      const checkedBoxes = Array.from(document.querySelectorAll('.batch-chk:checked'));
+      if (!checkedBoxes.length) {
+        Toast.error('Please select at least one product to generate labels.');
+        return;
+      }
+
+      const wrapper = document.getElementById('batch-preview-wrapper');
+      const sheet = document.getElementById('printable-sheet');
+      sheet.innerHTML = '';
+      wrapper.classList.remove('hidden');
+
+      let labelIdx = 0;
+      checkedBoxes.forEach(chk => {
+        const prodId = chk.dataset.id;
+        const prod = cachedProducts.find(p => p.id == prodId);
+        if (!prod) return;
+
+        const qtyInput = document.getElementById(`batch-qty-${prodId}`);
+        const copies = parseInt(qtyInput ? qtyInput.value : 1, 10) || 1;
+
+        for (let i = 0; i < copies; i++) {
+          labelIdx++;
+          const svgId = `batch-svg-${labelIdx}`;
+          const labelDiv = document.createElement('div');
+          labelDiv.className = 'barcode-label';
+          labelDiv.innerHTML = `
+            <div style="font-size:10px; font-weight:bold; max-width:55mm; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              ${prod.name}
+            </div>
+            <svg id="${svgId}"></svg>
+            <div style="font-size:11px; font-weight:900; color:#059669;">
+              $${parseFloat(prod.selling_price).toFixed(2)}
+            </div>
+          `;
+          sheet.appendChild(labelDiv);
+
+          setTimeout(() => {
+            try {
+              JsBarcode(`#${svgId}`, prod.barcode || prod.sku, {
+                format: "CODE128",
+                width: 1.4,
+                height: 34,
+                displayValue: true,
+                fontSize: 10,
+                margin: 0
+              });
+            } catch (err) {}
+          }, 0);
+        }
+      });
+
+      Toast.success(`Generated ${labelIdx} printable barcode sticker labels!`);
+      wrapper.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadCatalogProducts();
     });
   </script>
 </body>
