@@ -214,6 +214,7 @@
   <script src="/js/toast.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/layout.js"></script>
+  <script src="/js/ui.js"></script>
   <script>
     Layout.init('purchases');
 
@@ -237,14 +238,14 @@
 
         // Fill filter
         document.getElementById('supplier-filter').innerHTML = '<option value="">All Suppliers</option>' + 
-          cachedSuppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+          cachedSuppliers.map(s => `<option value="${UI.escape(s.id)}">${UI.escape(s.name)}</option>`).join('');
 
         document.getElementById('warehouse-filter').innerHTML = '<option value="">All Warehouses</option>' + 
-          cachedWarehouses.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+          cachedWarehouses.map(w => `<option value="${UI.escape(w.id)}">${UI.escape(w.name)}</option>`).join('');
 
         // Fill modal
-        document.getElementById('po-supplier').innerHTML = cachedSuppliers.map(s => `<option value="${s.id}">${s.name} (${s.company || 'Vendor'})</option>`).join('');
-        document.getElementById('po-warehouse').innerHTML = cachedWarehouses.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+        document.getElementById('po-supplier').innerHTML = cachedSuppliers.map(s => `<option value="${UI.escape(s.id)}">${UI.escape(s.name)} (${UI.escape(s.company || 'Vendor')})</option>`).join('');
+        document.getElementById('po-warehouse').innerHTML = cachedWarehouses.map(w => `<option value="${UI.escape(w.id)}">${UI.escape(w.name)}</option>`).join('');
 
       } catch (err) {
         console.error(err);
@@ -275,14 +276,14 @@
 
           return `
             <tr class="hover:bg-slate-50/80 transition">
-              <td class="px-5 py-3.5 font-bold text-slate-900">${p.invoice_number}</td>
-              <td class="px-4 py-3.5 font-medium text-slate-800">${p.supplier_name || 'Vendor'}</td>
-              <td class="px-4 py-3.5 text-slate-600">${p.warehouse_name}</td>
-              <td class="px-4 py-3.5 text-slate-500">${p.purchase_date.slice(0, 10)}</td>
+              <td class="px-5 py-3.5 font-bold text-slate-900">${UI.escape(p.invoice_number)}</td>
+              <td class="px-4 py-3.5 font-medium text-slate-800">${UI.escape(p.supplier_name || 'Vendor')}</td>
+              <td class="px-4 py-3.5 text-slate-600">${UI.escape(p.warehouse_name)}</td>
+              <td class="px-4 py-3.5 text-slate-500">${UI.escape(p.purchase_date.slice(0, 10))}</td>
               <td class="px-4 py-3.5 font-bold text-slate-900">${Auth.formatMoney(p.total)}</td>
               <td class="px-4 py-3.5 text-emerald-600 font-semibold">${Auth.formatMoney(p.paid_amount)}</td>
               <td class="px-4 py-3.5 text-rose-600 font-semibold">${Auth.formatMoney(p.remaining_amount)}</td>
-              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${p.payment_status}</span></td>
+              <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${UI.escape(p.payment_status)}</span></td>
               <td class="px-5 py-3.5 text-right">
                 <button onclick="viewPo(${p.id})" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold">
                   View Order
@@ -311,7 +312,7 @@
       tr.id = `po-row-${poRowCounter}`;
       tr.className = 'po-row hover:bg-slate-50';
 
-      const prodOptions = cachedProducts.map(p => `<option value="${p.id}" data-cost="${p.purchase_price}">${p.name} (${p.sku})</option>`).join('');
+      const prodOptions = cachedProducts.map(p => `<option value="${UI.escape(p.id)}" data-cost="${UI.escape(p.purchase_price)}">${UI.escape(p.name)} (${UI.escape(p.sku)})</option>`).join('');
 
       tr.innerHTML = `
         <td class="px-3 py-2">
@@ -475,8 +476,8 @@
               <tbody class="divide-y divide-slate-100">
                 ${p.items.map(i => `
                   <tr>
-                    <td class="px-3 py-2 font-medium">${i.product_name} <span class="block text-[10px] text-slate-400 font-mono">${i.product_sku}</span></td>
-                    <td class="px-3 py-2">${i.quantity} ${i.product_unit}</td>
+                    <td class="px-3 py-2 font-medium">${UI.escape(i.product_name)} <span class="block text-[10px] text-slate-400 font-mono">${UI.escape(i.product_sku)}</span></td>
+                    <td class="px-3 py-2">${UI.escape(i.quantity)} ${UI.escape(i.product_unit)}</td>
                     <td class="px-3 py-2">${Auth.formatMoney(i.purchase_price)}</td>
                     <td class="px-3 py-2 text-right font-bold text-slate-800">${Auth.formatMoney(i.total)}</td>
                   </tr>

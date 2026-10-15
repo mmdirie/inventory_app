@@ -58,9 +58,10 @@ const API = (function() {
       const url = query ? `${endpoint}?${query}` : endpoint;
       return request(url, { method: 'GET' });
     },
-    post: (endpoint, body = {}) => request(endpoint, {
+    post: (endpoint, body = {}, headers = {}) => request(endpoint, {
       method: 'POST',
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      headers
     }),
     put: (endpoint, body = {}) => request(endpoint, {
       method: 'PUT',

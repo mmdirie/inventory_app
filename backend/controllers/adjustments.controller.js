@@ -2,6 +2,7 @@ const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
 const { validateRequired } = require('../validators/input.validator');
+const { nextDocumentNumber } = require('../utils/document-number');
 
 /**
  * GET /api/adjustments
@@ -119,12 +120,7 @@ async function createAdjustment(req, res, next) {
       newQty = currentQty - qty;
     }
 
-    const year = new Date().getFullYear();
-    const [countRow] = await conn.execute(
-      "SELECT COUNT(*) as cnt FROM stock_adjustments WHERE adjustment_number LIKE ?",
-      [`ADJ-${year}-%`]
-    );
-    const adjustmentNumber = `ADJ-${year}-${String(countRow[0].cnt + 1).padStart(4, '0')}`;
+    const adjustmentNumber = await nextDocumentNumber(conn, 'adjustment', 'ADJ-');
     const userId = req.user ? req.user.id : null;
 
     // 1. Insert adjustment record

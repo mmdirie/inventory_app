@@ -2,6 +2,15 @@ const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
 const { validateRequired } = require('../validators/input.validator');
+const { nextDocumentNumber } = require('../utils/document-number');
+
+function parseAmount(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const text = String(value).trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text)) return null;
+  const amount = Number(text);
+  return Number.isFinite(amount) && amount <= 9999999999999.99 ? amount : null;
+}
 
 /**
  * GET /api/debts
@@ -82,16 +91,40 @@ async function payDebt(req, res, next) {
     const { id } = req.params;
     const { amount, payment_method = 'Cash', payment_date = new Date().toISOString().slice(0, 10), notes } = req.body;
 
-    const payVal = parseFloat(amount);
-    if (isNaN(payVal) || payVal <= 0) {
+    const payVal = parseAmount(amount);
+    if (payVal === null || payVal <= 0 || !['Cash', 'Bank', 'Mobile Money', 'Other'].includes(payment_method)) {
       await conn.rollback();
-      return error(res, 'Payment amount must be a positive number', 400);
+      return error(res, 'Payment amount and method must be valid', 400);
+    }
+
+    const [debtPreviewRows] = await conn.execute(
+      'SELECT debt_type, party_id, reference_type, reference_id FROM debts WHERE id = ?',
+      [id]
+    );
+    if (debtPreviewRows.length === 0) {
+      await conn.rollback();
+      return error(res, 'Debt record not found', 404);
+    }
+
+    const debtPreview = debtPreviewRows[0];
+    const partyTable = debtPreview.debt_type === 'Customer' ? 'customers' : 'suppliers';
+    const [partyRows] = await conn.execute(
+      `SELECT id FROM ${partyTable} WHERE id = ? FOR UPDATE`,
+      [debtPreview.party_id]
+    );
+    if (partyRows.length === 0) {
+      await conn.rollback();
+      return error(res, 'Debt party record not found', 409);
     }
 
     const [debtRows] = await conn.execute('SELECT * FROM debts WHERE id = ? FOR UPDATE', [id]);
-    if (debtRows.length === 0) {
+    if (debtRows.length === 0 ||
+        debtRows[0].debt_type !== debtPreview.debt_type ||
+        Number(debtRows[0].party_id) !== Number(debtPreview.party_id) ||
+        debtRows[0].reference_type !== debtPreview.reference_type ||
+        Number(debtRows[0].reference_id) !== Number(debtPreview.reference_id)) {
       await conn.rollback();
-      return error(res, 'Debt record not found', 404);
+      return error(res, 'Debt changed while processing the payment; retry the request', 409);
     }
 
     const debt = debtRows[0];
@@ -100,13 +133,13 @@ async function payDebt(req, res, next) {
       return error(res, 'This debt has already been completely settled', 400);
     }
 
-    if (payVal > debt.remaining_amount) {
+    if (payVal > Number(debt.remaining_amount)) {
       await conn.rollback();
       return error(res, `Payment amount ($${payVal}) exceeds outstanding debt ($${debt.remaining_amount})`, 400);
     }
 
-    const newPaidAmount = parseFloat(debt.paid_amount) + payVal;
-    const newRemainingAmount = Math.max(0, parseFloat(debt.remaining_amount) - payVal);
+    const newPaidAmount = Number((Number(debt.paid_amount) + payVal).toFixed(2));
+    const newRemainingAmount = Number(Math.max(0, Number(debt.remaining_amount) - payVal).toFixed(2));
     const newStatus = newRemainingAmount === 0 ? 'Paid' : 'Partially Paid';
     const userId = req.user ? req.user.id : null;
 
@@ -121,6 +154,15 @@ async function payDebt(req, res, next) {
 
     // 2. Update party balance
     if (debt.debt_type === 'Customer') {
+      const [sourceRows] = await conn.execute(
+        'SELECT customer_id FROM sales WHERE id = ? FOR UPDATE',
+        [debt.reference_id]
+      );
+      if (debt.reference_type !== 'Sale' || !sourceRows.length ||
+          Number(sourceRows[0].customer_id) !== Number(debt.party_id)) {
+        await conn.rollback();
+        return error(res, 'Debt source sale is missing or does not match the customer', 409);
+      }
       await conn.execute('UPDATE customers SET balance = GREATEST(0, balance - ?) WHERE id = ?', [payVal, debt.party_id]);
       
       // Update linked sale and invoice if applicable
@@ -138,6 +180,15 @@ async function payDebt(req, res, next) {
         `, [payVal, payVal, newStatus, debt.reference_id]);
       }
     } else if (debt.debt_type === 'Supplier') {
+      const [sourceRows] = await conn.execute(
+        'SELECT supplier_id FROM purchases WHERE id = ? FOR UPDATE',
+        [debt.reference_id]
+      );
+      if (debt.reference_type !== 'Purchase' || !sourceRows.length ||
+          Number(sourceRows[0].supplier_id) !== Number(debt.party_id)) {
+        await conn.rollback();
+        return error(res, 'Debt source purchase is missing or does not match the supplier', 409);
+      }
       await conn.execute('UPDATE suppliers SET balance = GREATEST(0, balance - ?) WHERE id = ?', [payVal, debt.party_id]);
 
       // Update linked purchase
@@ -151,8 +202,7 @@ async function payDebt(req, res, next) {
     }
 
     // 3. Record Payment
-    const year = new Date().getFullYear();
-    const payRef = `PAY-DEBT-${year}-${String(id).padStart(4, '0')}`;
+    const payRef = await nextDocumentNumber(conn, 'payment', 'PAY-');
     const pType = debt.debt_type === 'Customer' ? 'Customer Debt' : 'Supplier Debt';
 
     await conn.execute(`

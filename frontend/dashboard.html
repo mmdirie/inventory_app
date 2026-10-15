@@ -241,6 +241,7 @@
   <script src="/js/toast.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/layout.js"></script>
+  <script src="/js/ui.js"></script>
   <script>
     Layout.init('dashboard');
 
@@ -278,11 +279,11 @@
           lowStockContainer.innerHTML = data.stock.low_stock_items.map(item => `
             <div class="flex items-center justify-between p-2.5 rounded-xl bg-rose-50/60 border border-rose-100/80">
               <div class="truncate mr-2">
-                <div class="text-xs font-bold text-slate-800 truncate">${item.name}</div>
-                <div class="text-[10px] text-slate-500">SKU: ${item.sku} &bull; Min: ${item.min_stock_level}</div>
+                <div class="text-xs font-bold text-slate-800 truncate">${UI.escape(item.name)}</div>
+                <div class="text-[10px] text-slate-500">SKU: ${UI.escape(item.sku)} &bull; Min: ${UI.escape(item.min_stock_level)}</div>
               </div>
               <div class="text-right shrink-0">
-                <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-rose-500 text-white">${item.current_stock} ${item.unit}</span>
+                <span class="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-rose-500 text-white">${UI.escape(item.current_stock)} ${UI.escape(item.unit)}</span>
               </div>
             </div>
           `).join('');
@@ -299,10 +300,10 @@
               : (s.payment_status === 'Partially Paid' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200');
             return `
               <tr class="hover:bg-slate-50/60">
-                <td class="px-4 py-3 font-semibold text-slate-900">${s.invoice_number}</td>
-                <td class="px-4 py-3 text-slate-600 truncate max-w-[120px]">${s.customer_name}</td>
+                <td class="px-4 py-3 font-semibold text-slate-900">${UI.escape(s.invoice_number)}</td>
+                <td class="px-4 py-3 text-slate-600 truncate max-w-[120px]">${UI.escape(s.customer_name)}</td>
                 <td class="px-4 py-3 font-bold text-slate-800">${Auth.formatMoney(s.total)}</td>
-                <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${s.payment_status}</span></td>
+                <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${UI.escape(s.payment_status)}</span></td>
               </tr>
             `;
           }).join('');
@@ -319,10 +320,10 @@
               : (p.payment_status === 'Partially Paid' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200');
             return `
               <tr class="hover:bg-slate-50/60">
-                <td class="px-4 py-3 font-semibold text-slate-900">${p.invoice_number}</td>
-                <td class="px-4 py-3 text-slate-600 truncate max-w-[120px]">${p.supplier_name || 'Vendor'}</td>
+                <td class="px-4 py-3 font-semibold text-slate-900">${UI.escape(p.invoice_number)}</td>
+                <td class="px-4 py-3 text-slate-600 truncate max-w-[120px]">${UI.escape(p.supplier_name || 'Vendor')}</td>
                 <td class="px-4 py-3 font-bold text-slate-800">${Auth.formatMoney(p.total)}</td>
-                <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${p.payment_status}</span></td>
+                <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${UI.escape(p.payment_status)}</span></td>
               </tr>
             `;
           }).join('');

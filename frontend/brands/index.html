@@ -96,6 +96,7 @@
   <script src="/js/toast.js"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/layout.js"></script>
+  <script src="/js/ui.js"></script>
   <script>
     Layout.init('brands');
 
@@ -114,15 +115,15 @@
 
         tbody.innerHTML = brands.map(b => `
           <tr class="hover:bg-slate-50/80 transition">
-            <td class="px-5 py-3.5 font-bold text-slate-900">${b.name}</td>
-            <td class="px-4 py-3.5 text-slate-500 max-w-xs truncate">${b.description || '-'}</td>
+            <td class="px-5 py-3.5 font-bold text-slate-900">${UI.escape(b.name)}</td>
+            <td class="px-4 py-3.5 text-slate-500 max-w-xs truncate">${UI.escape(b.description || '-')}</td>
             <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">${b.product_count} products</span></td>
-            <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${b.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}">${b.status}</span></td>
+            <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${b.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}">${UI.escape(b.status)}</span></td>
             <td class="px-5 py-3.5 text-right space-x-2">
-              <button onclick="editBrand(${b.id}, '${b.name.replace(/'/g, "\\'")}', '${(b.description || '').replace(/'/g, "\\'")}', '${b.status}')" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100">
+              <button onclick="editBrand(${b.id}, this.dataset.name, this.dataset.description, this.dataset.status)" data-name="${UI.escape(b.name)}" data-description="${UI.escape(b.description || '')}" data-status="${UI.escape(b.status)}" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100">
                 <i class="fa-solid fa-pen-to-square"></i>
               </button>
-              <button onclick="deleteBrand(${b.id}, '${b.name.replace(/'/g, "\\'")}')" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100">
+              <button onclick="deleteBrand(${b.id}, this.dataset.name)" data-name="${UI.escape(b.name)}" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100">
                 <i class="fa-solid fa-trash-can"></i>
               </button>
             </td>

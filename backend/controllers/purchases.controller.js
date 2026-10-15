@@ -2,6 +2,7 @@ const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
 const { validateRequired } = require('../validators/input.validator');
+const { nextDocumentNumber } = require('../utils/document-number');
 
 /**
  * GET /api/purchases
@@ -195,12 +196,7 @@ async function createPurchase(req, res, next) {
     const [settings] = await conn.execute('SELECT purchase_prefix FROM settings LIMIT 1');
     const prefix = settings.length > 0 ? settings[0].purchase_prefix : 'PO-';
     const year = new Date().getFullYear();
-    const [maxPo] = await conn.execute(
-      "SELECT COUNT(*) as cnt FROM purchases WHERE invoice_number LIKE ?",
-      [`${prefix}${year}-%`]
-    );
-    const seq = String(maxPo[0].cnt + 1).padStart(4, '0');
-    const invoiceNumber = `${prefix}${year}-${seq}`;
+    const invoiceNumber = await nextDocumentNumber(conn, 'purchase', prefix, year);
 
     // Calculate subtotal
     let subtotal = 0;

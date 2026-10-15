@@ -34,8 +34,9 @@ function setGroupingOptions() {
   document.getElementById('end-date').disabled = reportType.value === 'inventory';
 }
 function displayValue(key, value) {
+  if (value === null || value === undefined) return '—';
   const amountKey = /(revenue|cost|price|value|amount|paid|collected|debt|payable|profit|expense|discount|tax|subtotal|cash)/i.test(key);
-  return amountKey ? UI.money(value) : UI.escape(value == null ? '—' : value);
+  return amountKey ? UI.money(value) : UI.escape(value);
 }
 function renderCards(record) {
   const entries = Object.entries(record || {});
