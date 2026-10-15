@@ -15,10 +15,10 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
       <div>
         <h1 class="text-2xl font-black text-slate-900 tracking-tight">Sales Orders History</h1>
-        <p class="text-xs text-slate-500 mt-1">Transaction log, customer billing, and invoice archives</p>
+        <p class="text-xs text-slate-500 mt-1">Completed sales, customer billing, and invoice archives</p>
       </div>
-      <a href="/sales/index.html" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center self-start sm:self-auto">
-        <i class="fa-solid fa-cash-register mr-2"></i> Launch POS
+      <a id="create-sale-link" href="/sales/index.html" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center self-start sm:self-auto">
+        <i class="fa-solid fa-cash-register mr-2"></i> Create Sale
       </a>
     </div>
 
@@ -40,6 +40,7 @@
           <option value="Bank">Bank Transfer</option>
           <option value="Mobile Money">Mobile Money</option>
           <option value="Credit">Credit</option>
+          <option value="Other">Other</option>
         </select>
         <select id="status-filter" class="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
           <option value="">All Statuses</option>
@@ -129,7 +130,9 @@
         const whs = whRes.data || [];
         document.getElementById('warehouse-filter').innerHTML = '<option value="">All Warehouses</option>' + 
           whs.map(w => `<option value="${UI.escape(w.id)}">${UI.escape(w.name)}</option>`).join('');
-      } catch (err) {}
+      } catch (err) {
+        Toast.error(`Failed to load warehouse filters: ${err.message}`);
+      }
     }
 
     async function loadSales(page = 1) {
@@ -145,7 +148,16 @@
         const tbody = document.getElementById('sales-tbody');
 
         if (sales.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="10" class="px-5 py-8 text-center text-slate-400">No sales transactions found.</td></tr>';
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="10" class="px-5 py-10 text-center">
+                <p class="text-sm font-semibold text-slate-700">No sales found. Create your first sale.</p>
+                ${Auth.hasPermission('sales.create') ? `
+                  <a href="/sales/index.html" class="inline-flex mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl">
+                    <i class="fa-solid fa-cash-register mr-2"></i>Create Sale
+                  </a>` : ''}
+              </td>
+            </tr>`;
           return;
         }
 
@@ -166,8 +178,8 @@
               <td class="px-4 py-3.5 text-rose-600 font-bold">${Auth.formatMoney(s.remaining_amount)}</td>
               <td class="px-4 py-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass}">${UI.escape(s.payment_status)}</span></td>
               <td class="px-5 py-3.5 text-right">
-                <button onclick="viewSaleDetails(${s.id})" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold">
-                  Invoice
+                <button onclick="viewSaleDetails(${Number(s.id)})" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold">
+                  View Details
                 </button>
               </td>
             </tr>
@@ -220,8 +232,8 @@
               <tbody class="divide-y divide-slate-100">
                 ${s.items.map(i => `
                   <tr>
-                    <td class="px-3 py-2 font-medium">${i.product_name} <span class="block text-[10px] text-slate-400 font-mono">${i.product_sku}</span></td>
-                    <td class="px-3 py-2">${i.quantity} ${i.product_unit}</td>
+                    <td class="px-3 py-2 font-medium">${UI.escape(i.product_name)} <span class="block text-[10px] text-slate-400 font-mono">${UI.escape(i.product_sku)}</span></td>
+                    <td class="px-3 py-2">${UI.escape(i.quantity)} ${UI.escape(i.product_unit)}</td>
                     <td class="px-3 py-2">${Auth.formatMoney(i.unit_price)}</td>
                     <td class="px-3 py-2 text-right font-bold text-slate-800">${Auth.formatMoney(i.total)}</td>
                   </tr>
@@ -248,7 +260,7 @@
 
     function printCurrentInvoice() {
       if (currentInvoiceData) {
-        window.open(`/invoices/index.html?invoice=${currentInvoiceData.invoice_number}`, '_blank');
+        window.open(`/invoices/index.html?invoice=${encodeURIComponent(currentInvoiceData.invoice_number)}`, '_blank');
       }
     }
 
@@ -258,8 +270,25 @@
     document.getElementById('status-filter').addEventListener('change', () => loadSales(1));
 
     document.addEventListener('DOMContentLoaded', async () => {
+      if (!Auth.hasPermission('sales.create')) {
+        document.getElementById('create-sale-link').classList.add('hidden');
+      }
       await initFilters();
       loadSales(1);
+    });
+
+    const historyUpdateKey = 'apex_sales_history_updated';
+    let lastHistoryUpdate = localStorage.getItem(historyUpdateKey);
+    function refreshAfterPosSale() {
+      const updatedAt = localStorage.getItem(historyUpdateKey);
+      if (updatedAt && updatedAt !== lastHistoryUpdate) {
+        lastHistoryUpdate = updatedAt;
+        loadSales(1);
+      }
+    }
+    window.addEventListener('pageshow', refreshAfterPosSale);
+    window.addEventListener('storage', event => {
+      if (event.key === historyUpdateKey) refreshAfterPosSale();
     });
   </script>
 </body>

@@ -1,7 +1,7 @@
 const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const { validateRequired, parsePagination } = require('../validators/input.validator');
 const { nextDocumentNumber } = require('../utils/document-number');
 
 function parseAmount(value) {
@@ -17,8 +17,8 @@ function parseAmount(value) {
  */
 async function getAllPayments(req, res, next) {
   try {
-    const { payment_type, party_type, payment_method, start_date, end_date, search, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { payment_type, party_type, payment_method, start_date, end_date, search } = req.query;
+    const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
     const where = [];
 
@@ -70,16 +70,16 @@ async function getAllPayments(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const payments = await query(dataSql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    const payments = await query(dataSql, [...params, limit, offset]);
 
     return success(res, {
       total_amount: Number(sumRow.total_amount),
       payments,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Payments fetched successfully');
   } catch (err) {
@@ -113,7 +113,7 @@ async function createPayment(req, res, next) {
     }
 
     const amountVal = parseAmount(amount);
-    const paymentTypes = ['Customer Sale', 'Customer Debt', 'Supplier Purchase', 'Supplier Debt', 'Standalone', 'Expense'];
+    const paymentTypes = ['Customer Sale', 'Customer Debt', 'Supplier Purchase', 'Supplier Debt', 'Customer Refund', 'Supplier Refund', 'Standalone', 'Expense'];
     const paymentMethods = ['Cash', 'Bank', 'Mobile Money', 'Other'];
     if (amountVal === null || amountVal <= 0) {
       await conn.rollback();
@@ -158,9 +158,10 @@ async function createPayment(req, res, next) {
 
     const isDebtSettlement = payment_type === 'Customer Debt' || payment_type === 'Supplier Debt';
     const isSaleOrPurchaseSettlement = payment_type === 'Customer Sale' || payment_type === 'Supplier Purchase';
-    if ((isDebtSettlement || isSaleOrPurchaseSettlement) && referenceId === null) {
+    const isRefundSettlement = payment_type === 'Customer Refund' || payment_type === 'Supplier Refund';
+    if ((isDebtSettlement || isSaleOrPurchaseSettlement || isRefundSettlement) && referenceId === null) {
       await conn.rollback();
-      return error(res, 'A debt or transaction reference is required for linked payments', 400);
+      return error(res, 'A linked reference is required for this payment type', 400);
     }
     if (payment_type === 'Standalone' && referenceId !== null) {
       await conn.rollback();
@@ -173,7 +174,31 @@ async function createPayment(req, res, next) {
 
     let referenceNumber;
     let linkedReference = referenceId;
-    if (isDebtSettlement) {
+    if (isRefundSettlement) {
+      const expectedParty = payment_type === 'Customer Refund' ? 'Customer' : 'Supplier';
+      if (party_type !== expectedParty) {
+        await conn.rollback();
+        return error(res, 'Payment party type does not match the refund type', 400);
+      }
+      const destinationType = payment_type === 'Customer Refund' ? 'Sale Return' : 'Purchase Return';
+      const [returnRows] = await conn.execute(
+        'SELECT * FROM `returns` WHERE id = ? AND return_type = ? FOR UPDATE',
+        [referenceId, destinationType]
+      );
+      if (!returnRows.length) {
+        await conn.rollback();
+        return error(res, 'Refund reference does not match the selected party or return type', 404);
+      }
+      const linkedPartyId = payment_type === 'Customer Refund' ? Number(returnRows[0].customer_id) : Number(returnRows[0].supplier_id);
+      if (!Number.isSafeInteger(linkedPartyId) || linkedPartyId <= 0 || linkedPartyId !== partyId) {
+        await conn.rollback();
+        return error(res, 'Refund reference does not match the selected party', 400);
+      }
+      if (amountVal > Number(returnRows[0].refund_amount)) {
+        await conn.rollback();
+        return error(res, 'Refund amount exceeds the recorded return refund amount', 400);
+      }
+    } else if (isDebtSettlement) {
       const debtType = payment_type === 'Customer Debt' ? 'Customer' : 'Supplier';
       if (party_type !== debtType) {
         await conn.rollback();

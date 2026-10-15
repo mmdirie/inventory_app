@@ -1,7 +1,7 @@
 const { query } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const { validateRequired, validateId } = require('../validators/input.validator');
 
 async function getAllWarehouses(req, res, next) {
   try {
@@ -42,7 +42,10 @@ async function getAllWarehouses(req, res, next) {
 
 async function getWarehouseById(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid warehouse ID is required', 400);
+    }
     const rows = await query('SELECT * FROM warehouses WHERE id = ?', [id]);
     if (!rows || rows.length === 0) {
       return error(res, 'Warehouse not found', 404);
@@ -118,7 +121,10 @@ async function createWarehouse(req, res, next) {
 
 async function updateWarehouse(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid warehouse ID is required', 400);
+    }
     const { name, location, manager, phone, description, status, is_default } = req.body;
 
     const existing = await query('SELECT * FROM warehouses WHERE id = ?', [id]);
@@ -176,7 +182,10 @@ async function updateWarehouse(req, res, next) {
 
 async function deleteWarehouse(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid warehouse ID is required', 400);
+    }
     const [stockRef] = await query('SELECT SUM(quantity) as total FROM warehouse_stock WHERE warehouse_id = ?', [id]);
     if (stockRef.total && stockRef.total > 0) {
       return error(res, `Cannot delete warehouse. It currently holds ${stockRef.total} units of inventory. Transfer stock first.`, 400);

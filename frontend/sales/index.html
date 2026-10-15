@@ -9,11 +9,20 @@
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
   <link rel="stylesheet" href="/css/custom.css" />
 </head>
-<body class="bg-slate-100 overflow-hidden">
+<body class="bg-slate-100">
   <div id="app-layout">
-    
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-5 gap-3">
+      <div>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Create Sale</h1>
+        <p class="text-xs text-slate-500 mt-1">Search products, build a cart, and complete payment.</p>
+      </div>
+      <a href="/sales/list.html" class="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 shadow-sm transition flex items-center self-start sm:self-auto">
+        <i class="fa-solid fa-receipt mr-2"></i> Sales History
+      </a>
+    </div>
+
     <!-- POS LAYOUT: 2 PANELS (LEFT: Catalog & Search, RIGHT: Active Checkout Cart) -->
-    <div class="h-[calc(100vh-7.5rem)] flex flex-col lg:flex-row gap-5">
+    <div class="min-h-[calc(100vh-12rem)] flex flex-col lg:flex-row gap-5">
       
       <!-- LEFT PANEL: Product Grid & Barcode Scanner Input -->
       <div class="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
@@ -81,7 +90,7 @@
             <span class="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center">
               <i class="fa-solid fa-cart-shopping mr-2 text-blue-600"></i> Active Cart
             </span>
-            <button onclick="clearCart()" class="text-[11px] text-rose-500 hover:text-rose-700 font-bold">Clear All</button>
+            <button onclick="clearCart()" class="text-[11px] text-rose-500 hover:text-rose-700 font-bold">Cancel Sale</button>
           </div>
           <select id="pos-customer" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium">
             <option value="">Walk-in Retail Customer (Cash)</option>
@@ -167,12 +176,15 @@
             <button type="button" onclick="selectPayMethod('Credit')" class="pay-method-btn px-3 py-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center space-x-2">
               <i class="fa-solid fa-file-invoice-dollar"></i> <span>Customer Credit</span>
             </button>
+            <button type="button" onclick="selectPayMethod('Other')" class="pay-method-btn px-3 py-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-ellipsis"></i> <span>Other</span>
+            </button>
           </div>
         </div>
 
         <div>
           <label class="block font-bold text-slate-700 mb-1">Amount Paid by Customer ($)</label>
-          <input type="number" step="0.01" id="modal-amount-paid" oninput="updateChangeCalculation()" class="w-full px-3 py-2.5 text-sm font-bold border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          <input type="number" step="0.01" min="0" id="modal-amount-paid" oninput="updateChangeCalculation()" class="w-full px-3 py-2.5 text-sm font-bold border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
         </div>
 
         <div class="grid grid-cols-2 gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
@@ -194,7 +206,7 @@
         <div class="pt-3 border-t border-slate-100 flex justify-end space-x-2">
           <button type="button" onclick="closePaymentModal()" class="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
           <button type="button" id="confirm-pay-btn" onclick="submitSaleTransaction()" class="px-6 py-2 font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-600/20">
-            Complete & Print Receipt
+            Complete Sale
           </button>
         </div>
       </div>
@@ -208,9 +220,9 @@
       <!-- Printable Section -->
       <div id="printable-content" class="text-slate-800 text-xs">
         <div class="text-center pb-3 border-b border-dashed border-slate-300">
-          <h2 id="rec-biz-name" class="font-black text-sm uppercase">Apex Commercial Supplies Ltd</h2>
-          <p id="rec-biz-addr" class="text-[10px] text-slate-500">742 Evergreen Commercial Plaza, Chicago</p>
-          <p id="rec-biz-phone" class="text-[10px] text-slate-500">Tel: +1 (555) 234-5678</p>
+          <h2 id="rec-biz-name" class="font-black text-sm uppercase">My Business</h2>
+          <p id="rec-biz-addr" class="text-[10px] text-slate-500"></p>
+          <p id="rec-biz-phone" class="text-[10px] text-slate-500"></p>
           <div class="font-bold font-mono text-[11px] mt-1 text-slate-900" id="rec-inv-num">INV-2026-0000</div>
           <div class="text-[10px] text-slate-500" id="rec-date">2026-10-09</div>
         </div>
@@ -280,6 +292,11 @@
     let selectedMethod = 'Cash';
     let cachedWarehouses = [];
     let cachedCustomers = [];
+    let catalogSearchTimer;
+    let isSubmittingSale = false;
+    let pendingSaleKey = null;
+    let pendingSaleFingerprint = '';
+    let currentWarehouseId = '';
 
     // Elements
     const barcodeInput = document.getElementById('barcode-scan-input');
@@ -292,7 +309,7 @@
         const [settingsRes, whRes, custRes, catRes] = await Promise.all([
           API.get('/settings'),
           API.get('/warehouses'),
-          API.get('/customers'),
+          API.get('/customers', { status: 'active' }),
           API.get('/categories')
         ]);
 
@@ -303,9 +320,10 @@
         cachedWarehouses = whRes.data || [];
         cachedCustomers = custRes.data || [];
 
-        warehouseSelect.innerHTML = cachedWarehouses.map(w => 
+        warehouseSelect.innerHTML = cachedWarehouses.length ? cachedWarehouses.map(w =>
           `<option value="${UI.escape(w.id)}" ${w.is_default ? 'selected' : ''}>${UI.escape(w.name)}</option>`
-        ).join('');
+        ).join('') : '<option value="">No active warehouses</option>';
+        currentWarehouseId = warehouseSelect.value;
 
         customerSelect.innerHTML = '<option value="">Walk-in Retail Customer (Cash)</option>' + 
           cachedCustomers.map(c => `<option value="${UI.escape(c.id)}">${UI.escape(c.name)} (${UI.escape(c.customer_type)} - Debt: ${Auth.formatMoney(c.balance)})</option>`).join('');
@@ -322,10 +340,17 @@
         });
 
         // Load catalog for initial warehouse
-        await loadCatalog();
+        if (cachedWarehouses.length) {
+          await loadCatalog();
+        } else {
+          document.getElementById('catalog-grid').innerHTML =
+            '<div class="col-span-full text-center py-12 text-slate-500 text-sm">Create an active warehouse and add stocked products before making a sale.</div>';
+        }
 
       } catch (err) {
         Toast.error('Failed to initialize POS: ' + err.message);
+        document.getElementById('catalog-grid').innerHTML =
+          `<div class="col-span-full text-center py-12 text-rose-600 text-sm">${UI.escape(err.message)}</div>`;
       }
     }
 
@@ -345,23 +370,35 @@
 
     async function loadCatalog() {
       const whId = warehouseSelect.value;
-      if (!whId) return;
+      const container = document.getElementById('catalog-grid');
+      if (!whId) {
+        catalog = [];
+        renderCatalog();
+        return;
+      }
 
       try {
-        const res = await API.get('/products', { limit: 150, warehouse_id: whId, status: 'active' });
+        container.innerHTML = '<div class="col-span-full text-center py-12 text-slate-400 text-xs">Loading products...</div>';
+        const search = searchNameInput.value.trim();
+        const res = await API.get('/products', {
+          limit: 100,
+          warehouse_id: whId,
+          status: 'active',
+          search
+        });
         catalog = res.data.products || [];
         renderCatalog();
       } catch (err) {
-        console.error(err);
+        catalog = [];
+        container.innerHTML = `<div class="col-span-full text-center py-12 text-rose-600 text-xs">${UI.escape(err.message)}</div>`;
+        Toast.error(`Failed to load products: ${err.message}`);
       }
     }
 
     function renderCatalog() {
-      const searchTerm = searchNameInput.value.toLowerCase().trim();
       const filtered = catalog.filter(p => {
-        const matchName = p.name.toLowerCase().includes(searchTerm) || p.sku.toLowerCase().includes(searchTerm) || p.barcode.includes(searchTerm);
         const matchCat = !currentCategoryId || p.category_id == currentCategoryId;
-        return matchName && matchCat;
+        return matchCat;
       });
 
       const container = document.getElementById('catalog-grid');
@@ -371,7 +408,8 @@
       }
 
       container.innerHTML = filtered.map(p => {
-        const isOutOfStock = p.current_stock <= 0;
+        const availableStock = Number(p.warehouse_quantity ?? p.current_stock);
+        const isOutOfStock = availableStock <= 0;
         return `
           <button 
             type="button" 
@@ -386,7 +424,7 @@
             <div class="mt-3 flex items-center justify-between border-t border-slate-200/60 pt-2 text-xs">
               <span class="font-black text-slate-900">${Auth.formatMoney(p.selling_price)}</span>
               <span class="text-[10px] font-bold ${isOutOfStock ? 'text-rose-500' : 'text-slate-500'}">
-                ${isOutOfStock ? 'Out of Stock' : `${UI.escape(p.current_stock)} ${UI.escape(p.unit)}`}
+                ${isOutOfStock ? 'Out of Stock' : `${UI.escape(availableStock)} ${UI.escape(p.unit)}`}
               </span>
             </div>
           </button>
@@ -396,18 +434,19 @@
 
     // Add to Cart
     function addToCart(productId) {
-      const prod = catalog.find(p => p.id === productId);
+      const prod = catalog.find(p => Number(p.id) === Number(productId));
       if (!prod) return;
+      const availableStock = Number(prod.warehouse_quantity ?? prod.current_stock);
 
-      const existing = cart.find(i => i.product_id === productId);
+      const existing = cart.find(i => Number(i.product_id) === Number(productId));
       if (existing) {
-        if (existing.quantity >= prod.current_stock) {
-          Toast.warning(`Cannot add more. In-stock limit is ${prod.current_stock} ${prod.unit}.`);
+        if (existing.quantity >= availableStock) {
+          Toast.warning(`Cannot add more. In-stock limit is ${availableStock} ${prod.unit}.`);
           return;
         }
         existing.quantity += 1;
       } else {
-        if (prod.current_stock <= 0) {
+        if (availableStock <= 0) {
           Toast.error(`"${prod.name}" is currently out of stock in this warehouse.`);
           return;
         }
@@ -419,7 +458,7 @@
           unit: prod.unit,
           selling_price: parseFloat(prod.selling_price),
           quantity: 1,
-          available_stock: prod.current_stock
+          available_stock: availableStock
         });
       }
 
@@ -443,6 +482,24 @@
       renderCart();
     }
 
+    function setCartQty(productId, value) {
+      const item = cart.find(i => Number(i.product_id) === Number(productId));
+      if (!item) return;
+      const quantity = Number(value);
+      if (!Number.isSafeInteger(quantity) || quantity < 1) {
+        Toast.error('Quantity must be a whole number greater than zero.');
+        renderCart();
+        return;
+      }
+      if (quantity > item.available_stock) {
+        Toast.warning(`Cannot exceed available warehouse stock (${item.available_stock} ${item.unit}).`);
+        renderCart();
+        return;
+      }
+      item.quantity = quantity;
+      renderCart();
+    }
+
     function removeCartItem(productId) {
       cart = cart.filter(i => i.product_id !== productId);
       renderCart();
@@ -451,6 +508,11 @@
     function clearCart() {
       if (cart.length === 0) return;
       cart = [];
+      pendingSaleKey = null;
+      pendingSaleFingerprint = '';
+      document.getElementById('cart-discount-input').value = '0.00';
+      document.getElementById('modal-sale-notes').value = '';
+      customerSelect.value = '';
       renderCart();
     }
 
@@ -478,12 +540,13 @@
             <div class="text-[11px] text-slate-500 font-semibold mt-0.5">
               ${Auth.formatMoney(item.selling_price)} &times; ${item.quantity} = <span class="text-slate-900 font-bold">${Auth.formatMoney(item.selling_price * item.quantity)}</span>
             </div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Available: ${UI.escape(item.available_stock)} ${UI.escape(item.unit)}</div>
           </div>
           <div class="flex items-center space-x-1.5 shrink-0">
             <button onclick="updateCartQty(${item.product_id}, -1)" class="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center font-bold">
               -
             </button>
-            <span class="w-6 text-center font-black text-slate-800">${UI.escape(item.quantity)}</span>
+            <input type="number" min="1" max="${UI.escape(item.available_stock)}" step="1" value="${UI.escape(item.quantity)}" aria-label="Quantity for ${UI.escape(item.name)}" onchange="setCartQty(${item.product_id}, this.value)" class="w-12 h-7 text-center font-bold text-slate-800 border border-slate-200 rounded-md" />
             <button onclick="updateCartQty(${item.product_id}, 1)" class="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center font-bold">
               +
             </button>
@@ -500,8 +563,8 @@
     function updateCartCalculations() {
       const subtotal = cart.reduce((sum, i) => sum + (i.quantity * i.selling_price), 0);
       const discount = parseFloat(document.getElementById('cart-discount-input').value) || 0;
-      const tax = (subtotal * systemTaxRate) / 100;
-      const grandTotal = Math.max(0, subtotal + tax - discount);
+      const tax = Number((subtotal * systemTaxRate / 100).toFixed(2));
+      const grandTotal = Number(Math.max(0, subtotal + tax - discount).toFixed(2));
 
       document.getElementById('cart-subtotal').innerText = Auth.formatMoney(subtotal);
       document.getElementById('cart-tax').innerText = Auth.formatMoney(tax);
@@ -515,12 +578,25 @@
         e.preventDefault();
         const code = barcodeInput.value.trim();
         if (!code) return;
+        if (!warehouseSelect.value) {
+          Toast.error('Select an active warehouse before scanning products.');
+          return;
+        }
 
         barcodeInput.value = '';
         try {
-          const res = await API.get(`/products/barcode/${encodeURIComponent(code)}`);
-          if (res.data) {
-            addToCart(res.data.id);
+          const res = await API.get('/products', {
+            limit: 100,
+            warehouse_id: warehouseSelect.value,
+            status: 'active',
+            search: code
+          });
+          const product = (res.data.products || []).find(item => item.barcode === code || item.sku === code);
+          if (product) {
+            if (!catalog.some(item => Number(item.id) === Number(product.id))) catalog.push(product);
+            addToCart(product.id);
+          } else {
+            Toast.error('No active product with available stock matches that SKU or barcode.');
           }
         } catch (err) {
           Toast.error(`Barcode scan failed: ${err.message}`);
@@ -529,13 +605,24 @@
     });
 
     warehouseSelect.addEventListener('change', () => {
-      loadCatalog();
-      if (cart.length > 0) {
-        Toast.warning('Warehouse changed. Please verify cart items against warehouse stock.');
+      if (cart.length && !window.confirm('Changing warehouses will cancel the current sale cart. Continue?')) {
+        warehouseSelect.value = currentWarehouseId;
+        return;
       }
+      if (cart.length) {
+        cart = [];
+        renderCart();
+        pendingSaleKey = null;
+        pendingSaleFingerprint = '';
+      }
+      currentWarehouseId = warehouseSelect.value;
+      loadCatalog();
     });
 
-    searchNameInput.addEventListener('input', () => renderCatalog());
+    searchNameInput.addEventListener('input', () => {
+      clearTimeout(catalogSearchTimer);
+      catalogSearchTimer = setTimeout(loadCatalog, 250);
+    });
 
     // Payment Modal Controls
     const payModal = document.getElementById('payment-modal');
@@ -582,13 +669,24 @@
 
     // Submit Complete Sale Transaction
     async function submitSaleTransaction() {
-      const { subtotal, discount, tax, grandTotal } = updateCartCalculations();
+      if (isSubmittingSale) return;
+      if (!warehouseSelect.value || cart.length === 0) {
+        Toast.error('Select a warehouse and add at least one product before completing a sale.');
+        return;
+      }
+
+      const { subtotal, discount, grandTotal } = updateCartCalculations();
       const customerId = customerSelect.value || null;
       const warehouseId = warehouseSelect.value;
       const paidInput = parseFloat(document.getElementById('modal-amount-paid').value) || 0;
       const actualPaid = Math.min(grandTotal, paidInput);
       const notes = document.getElementById('modal-sale-notes').value.trim();
 
+      if (!Number.isFinite(discount) || discount < 0 || discount > subtotal ||
+          !Number.isFinite(paidInput) || paidInput < 0) {
+        Toast.error('Enter a valid discount and payment amount.');
+        return;
+      }
       if (grandTotal > actualPaid && !customerId) {
         Toast.error('Credit or partial payment sales require selecting an identified customer account.');
         return;
@@ -605,34 +703,46 @@
         warehouse_id: parseInt(warehouseId, 10),
         items,
         discount,
-        tax,
         payment_method: selectedMethod,
         paid_amount: actualPaid,
         notes
       };
 
+      const fingerprint = JSON.stringify(payload);
+      if (!pendingSaleKey || pendingSaleFingerprint !== fingerprint) {
+        pendingSaleKey = crypto.randomUUID();
+        pendingSaleFingerprint = fingerprint;
+      }
       const confirmBtn = document.getElementById('confirm-pay-btn');
+      isSubmittingSale = true;
       confirmBtn.disabled = true;
       confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Processing POS Transaction...';
 
       try {
-        const res = await API.post('/sales', payload);
+        const res = await API.post('/sales', payload, { 'Idempotency-Key': pendingSaleKey });
         const sale = res.data;
 
         Toast.success(`Sale completed! Invoice #${sale.invoice_number}`);
+        localStorage.setItem('apex_sales_history_updated', `${Date.now()}-${crypto.randomUUID()}`);
         closePaymentModal();
         showReceipt(sale);
 
         // Reset cart & refresh catalog stock
         cart = [];
+        pendingSaleKey = null;
+        pendingSaleFingerprint = '';
+        document.getElementById('cart-discount-input').value = '0.00';
+        document.getElementById('modal-sale-notes').value = '';
+        customerSelect.value = '';
         renderCart();
-        loadCatalog();
+        await loadCatalog();
 
       } catch (err) {
         Toast.error(err.message);
       } finally {
+        isSubmittingSale = false;
         confirmBtn.disabled = false;
-        confirmBtn.innerHTML = 'Complete & Print Receipt';
+        confirmBtn.innerHTML = 'Complete Sale';
       }
     }
 
@@ -692,7 +802,7 @@
         receiptModal.classList.remove('hidden');
 
       } catch (err) {
-        console.error('Failed to show receipt:', err);
+        Toast.error(`Sale completed, but the receipt could not be loaded: ${err.message}`);
       }
     }
 

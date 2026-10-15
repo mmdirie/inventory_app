@@ -1,3 +1,4 @@
--- Direct SQL seeding is disabled to prevent bypassing the fresh-database guard.
--- For a fresh database, run `npm run setup` and then configure seed credentials
--- before running the guarded `npm run seed` command.
+-- Direct SQL bootstrap is disabled to prevent bypassing the fresh-database guard.
+-- For a fresh database, run `npm run setup`, configure the first administrator
+-- in .env, then run the guarded `npm run seed` command. The bootstrap inserts
+-- authentication/permission data and default settings only; no demo business data.

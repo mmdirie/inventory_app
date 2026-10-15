@@ -452,7 +452,7 @@
     });
 
     document.getElementById('modal-payment-type').addEventListener('change', event => {
-      const linked = ['Customer Sale', 'Customer Debt', 'Supplier Purchase', 'Supplier Debt'].includes(event.target.value);
+      const linked = ['Customer Sale', 'Customer Debt', 'Supplier Purchase', 'Supplier Debt', 'Customer Refund', 'Supplier Refund'].includes(event.target.value);
       document.getElementById('payment-reference-wrap').classList.toggle('hidden', !linked);
       document.getElementById('modal-reference-id').required = linked;
     });

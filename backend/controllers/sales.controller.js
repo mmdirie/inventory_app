@@ -1,7 +1,8 @@
+const crypto = require('crypto');
 const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const { validateRequired, validateId, parsePagination } = require('../validators/input.validator');
 const { nextDocumentNumber } = require('../utils/document-number');
 
 function parseAmount(value) {
@@ -25,8 +26,8 @@ function parseQuantity(value) {
  */
 async function getAllSales(req, res, next) {
   try {
-    const { search, customer_id, warehouse_id, payment_status, payment_method, start_date, end_date, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { search, customer_id, warehouse_id, payment_status, payment_method, start_date, end_date } = req.query;
+    const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
     const where = [];
 
@@ -92,15 +93,15 @@ async function getAllSales(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const sales = await query(dataSql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    const sales = await query(dataSql, [...params, limit, offset]);
 
     return success(res, {
       sales,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Sales fetched successfully');
   } catch (err) {
@@ -113,7 +114,10 @@ async function getAllSales(req, res, next) {
  */
 async function getSaleById(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid sale ID is required', 400);
+    }
     const rows = await query(`
       SELECT 
         s.*,
@@ -178,7 +182,6 @@ async function createSale(req, res, next) {
       sale_date = new Date().toISOString().slice(0, 10),
       items,
       discount = 0,
-      tax = 0,
       payment_method = 'Cash',
       paid_amount = 0,
       notes
@@ -194,9 +197,56 @@ async function createSale(req, res, next) {
       await conn.rollback();
       return error(res, 'At least one item is required in the sale cart', 400);
     }
+    const parsedSaleDate = typeof sale_date === 'string'
+      ? new Date(`${sale_date}T00:00:00.000Z`)
+      : null;
+    if (!parsedSaleDate || Number.isNaN(parsedSaleDate.getTime()) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(sale_date) ||
+        parsedSaleDate.toISOString().slice(0, 10) !== sale_date) {
+      await conn.rollback();
+      return error(res, 'Sale date must be a valid date in YYYY-MM-DD format', 400);
+    }
     if (!['Cash', 'Bank', 'Mobile Money', 'Credit', 'Other'].includes(payment_method)) {
       await conn.rollback();
       return error(res, 'Invalid sale payment method', 400);
+    }
+
+    const idempotencyKey = req.get('Idempotency-Key');
+    if (!idempotencyKey || !/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) {
+      await conn.rollback();
+      return error(res, 'A valid Idempotency-Key is required for each sale', 400);
+    }
+
+    const requestHash = crypto.createHash('sha256').update(JSON.stringify(req.body)).digest('hex');
+    try {
+      await conn.execute(
+        'INSERT INTO sale_idempotency (user_id, idempotency_key, request_hash) VALUES (?, ?, ?)',
+        [req.user.id, idempotencyKey, requestHash]
+      );
+    } catch (err) {
+      if (err.code !== 'ER_DUP_ENTRY') throw err;
+      const [existingRows] = await conn.execute(
+        `SELECT request_hash, sale_id
+         FROM sale_idempotency
+         WHERE user_id = ? AND idempotency_key = ?
+         FOR UPDATE`,
+        [req.user.id, idempotencyKey]
+      );
+      await conn.rollback();
+      const existing = existingRows[0];
+      if (!existing || existing.request_hash !== requestHash || !existing.sale_id) {
+        return error(res, 'This sale submission key was already used for a different request', 409);
+      }
+      const [saleRows] = await query('SELECT * FROM sales WHERE id = ?', [existing.sale_id]);
+      const [saleItems] = await query('SELECT * FROM sale_items WHERE sale_id = ?', [existing.sale_id]);
+      if (!saleRows.length) {
+        return error(res, 'The original sale for this submission key no longer exists', 409);
+      }
+      return success(res, {
+        ...saleRows[0],
+        items: saleItems,
+        invoice_number: saleRows[0].invoice_number
+      }, 'Sale already completed');
     }
 
     // Verify warehouse
@@ -235,22 +285,19 @@ async function createSale(req, res, next) {
     // a warehouse_stock row has not yet been created for a product.
     let subtotal = 0;
     let itemDiscountTotal = 0;
-    let itemTaxTotal = 0;
-    const validatedItems = [];
+    const requestedItems = [];
     const requestedByProduct = new Map();
 
     for (const item of items) {
       const qty = parseQuantity(item.quantity);
-      const price = parseAmount(item.unit_price);
+      const requestedPrice = parseAmount(item.unit_price);
       const itemDisc = parseAmount(item.discount === undefined ? 0 : item.discount);
-      const itemTax = parseAmount(item.tax === undefined ? 0 : item.tax);
 
       if (!Number.isSafeInteger(Number(item.product_id)) || Number(item.product_id) <= 0 ||
-          qty === null || price === null || itemDisc === null || itemTax === null ||
-          price > 9999999999.99 || itemDisc > 9999999999.99 || itemTax > 9999999999.99 ||
-          itemDisc > qty * price || !Number.isFinite(qty * price) || qty * price > 9999999999999.99) {
+          qty === null || requestedPrice === null || requestedPrice > 9999999999.99 ||
+          itemDisc === null || itemDisc > 9999999999.99) {
         await conn.rollback();
-        return error(res, 'Invalid quantity, price, discount, or tax for one or more items', 400);
+        return error(res, 'Invalid quantity, price, or discount for one or more items', 400);
       }
 
       const productId = Number(item.product_id);
@@ -260,30 +307,58 @@ async function createSale(req, res, next) {
         return error(res, 'Combined product quantity exceeds the supported limit', 400);
       }
       requestedByProduct.set(productId, combinedQuantity);
-
-      const itemTotal = Number(((qty * price) - itemDisc + itemTax).toFixed(2));
-      subtotal += (qty * price);
-      itemDiscountTotal += itemDisc;
-      itemTaxTotal += itemTax;
-
-      validatedItems.push({
+      requestedItems.push({
         product_id: productId,
         quantity: qty,
-        unit_price: price,
-        discount: itemDisc,
-        tax: itemTax,
-        total: itemTotal
+        requested_price: requestedPrice,
+        discount: itemDisc
       });
     }
 
     const productIds = [...requestedByProduct.keys()].sort((a, b) => a - b);
     const [products] = await conn.execute(
-      `SELECT id, name, status FROM products WHERE id IN (${productIds.map(() => '?').join(',')}) ORDER BY id FOR UPDATE`,
+      `SELECT id, name, status, selling_price
+       FROM products
+       WHERE id IN (${productIds.map(() => '?').join(',')})
+       ORDER BY id FOR UPDATE`,
       productIds
     );
     if (products.length !== productIds.length || products.some(product => product.status !== 'active')) {
       await conn.rollback();
       return error(res, 'One or more products do not exist or are inactive', 400);
+    }
+
+    const productsById = new Map(products.map(product => [Number(product.id), product]));
+    const validatedItems = [];
+    for (const item of requestedItems) {
+      const product = productsById.get(item.product_id);
+      const price = parseAmount(product.selling_price);
+      const lineSubtotal = item.quantity * price;
+      if (price === null || price > 9999999999.99 || !Number.isFinite(lineSubtotal) ||
+          lineSubtotal > 9999999999999.99 || item.discount > lineSubtotal) {
+        await conn.rollback();
+        return error(res, 'Invalid product selling price or discount for one or more items', 400);
+      }
+      if (item.requested_price !== price) {
+        await conn.rollback();
+        return error(res, `The selling price for "${product.name}" has changed. Refresh the catalog and try again.`, 409);
+      }
+
+      subtotal += lineSubtotal;
+      itemDiscountTotal += item.discount;
+      validatedItems.push({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: price,
+        discount: item.discount,
+        tax: 0,
+        total: Number((lineSubtotal - item.discount).toFixed(2))
+      });
+    }
+
+    if (!Number.isFinite(subtotal) || subtotal > 9999999999999.99) {
+      await conn.rollback();
+      return error(res, 'Sale subtotal exceeds the supported limit', 400);
     }
 
     const [stockRows] = await conn.execute(`
@@ -306,18 +381,28 @@ async function createSale(req, res, next) {
     }
 
     const requestedDiscount = parseAmount(discount);
-    const requestedTax = parseAmount(tax);
     const paidVal = parseAmount(paid_amount);
-    if (requestedDiscount === null || requestedTax === null || paidVal === null ||
+    if (requestedDiscount === null || paidVal === null ||
         requestedDiscount + itemDiscountTotal > subtotal) {
       await conn.rollback();
-      return error(res, 'Sale discount, tax, or payment amount is invalid', 400);
+      return error(res, 'Sale discount or payment amount is invalid', 400);
     }
     subtotal = Number(subtotal.toFixed(2));
     const discountVal = Number((requestedDiscount + itemDiscountTotal).toFixed(2));
-    const taxVal = Number((requestedTax + itemTaxTotal).toFixed(2));
+    const [settings] = await conn.execute('SELECT invoice_prefix, tax_rate FROM settings LIMIT 1');
+    if (settings.length === 0) {
+      await conn.rollback();
+      return error(res, 'Business settings must be configured before completing a sale', 500);
+    }
+    const taxRate = Number(settings[0].tax_rate);
+    if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 1000) {
+      await conn.rollback();
+      return error(res, 'Configured tax rate is invalid', 500);
+    }
+    const taxVal = Number((subtotal * taxRate / 100).toFixed(2));
     const grandTotal = Number((subtotal - discountVal + taxVal).toFixed(2));
-    if (paidVal > grandTotal) {
+    if (!Number.isFinite(taxVal) || taxVal > 9999999999999.99 ||
+        !Number.isFinite(grandTotal) || grandTotal > 9999999999999.99 || paidVal > grandTotal) {
       await conn.rollback();
       return error(res, 'Sale discount, tax, or payment amount is invalid', 400);
     }
@@ -341,8 +426,7 @@ async function createSale(req, res, next) {
     }
 
     // Generate Invoice Number
-    const [settings] = await conn.execute('SELECT invoice_prefix FROM settings LIMIT 1');
-    const prefix = settings.length > 0 ? settings[0].invoice_prefix : 'INV-';
+    const prefix = settings[0].invoice_prefix;
     const year = new Date().getFullYear();
     const invoiceNumber = await nextDocumentNumber(conn, 'sale', prefix);
 
@@ -482,6 +566,19 @@ async function createSale(req, res, next) {
       ]);
     }
 
+    const [createdSaleRows] = await conn.execute('SELECT * FROM sales WHERE id = ?', [saleId]);
+    const saleResponse = {
+      ...createdSaleRows[0],
+      items: validatedItems,
+      invoice_number: invoiceNumber
+    };
+    await conn.execute(
+      `UPDATE sale_idempotency
+       SET sale_id = ?
+       WHERE user_id = ? AND idempotency_key = ?`,
+      [saleId, req.user.id, idempotencyKey]
+    );
+
     await conn.commit();
 
     await logAction({
@@ -493,12 +590,7 @@ async function createSale(req, res, next) {
       ip: req.ip
     });
 
-    const [createdSale] = await query('SELECT * FROM sales WHERE id = ?', [saleId]);
-    return success(res, {
-      ...createdSale,
-      items: validatedItems,
-      invoice_number: invoiceNumber
-    }, 'Sale completed successfully and invoice generated', 201);
+    return success(res, saleResponse, 'Sale completed successfully and invoice generated', 201);
   } catch (err) {
     await conn.rollback();
     next(err);

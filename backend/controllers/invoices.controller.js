@@ -1,13 +1,14 @@
 const { query } = require('../config/db');
 const { success, error } = require('../utils/response');
+const { parsePagination } = require('../validators/input.validator');
 
 /**
  * GET /api/invoices
  */
 async function getAllInvoices(req, res, next) {
   try {
-    const { search, status, start_date, end_date, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { search, status, start_date, end_date } = req.query;
+    const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
     const where = [];
 
@@ -56,15 +57,15 @@ async function getAllInvoices(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const invoices = await query(dataSql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    const invoices = await query(dataSql, [...params, limit, offset]);
 
     return success(res, {
       invoices,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Invoices fetched successfully');
   } catch (err) {

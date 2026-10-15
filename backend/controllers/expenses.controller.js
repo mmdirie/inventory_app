@@ -1,15 +1,15 @@
 const { query } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const { validateRequired, validateId, parsePagination, parseStrictNumber } = require('../validators/input.validator');
 
 /**
  * GET /api/expenses
  */
 async function getAllExpenses(req, res, next) {
   try {
-    const { category, payment_method, start_date, end_date, search, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { category, payment_method, start_date, end_date, search } = req.query;
+    const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
     const where = [];
 
@@ -57,16 +57,16 @@ async function getAllExpenses(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const expenses = await query(dataSql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    const expenses = await query(dataSql, [...params, limit, offset]);
 
     return success(res, {
       total_amount: Number(totalAmount),
       expenses,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Expenses fetched successfully');
   } catch (err) {
@@ -85,8 +85,8 @@ async function createExpense(req, res, next) {
       return error(res, `Missing required fields: ${missing.join(', ')}`, 400);
     }
 
-    const amountVal = parseFloat(amount);
-    if (isNaN(amountVal) || amountVal <= 0) {
+    const amountVal = parseStrictNumber(amount, 0.01);
+    if (amountVal === null) {
       return error(res, 'Expense amount must be a positive number', 400);
     }
 
@@ -126,8 +126,19 @@ async function createExpense(req, res, next) {
  */
 async function updateExpense(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid expense ID is required', 400);
+    }
     const { category, description, amount, payment_method, expense_date, notes } = req.body;
+
+    let amountVal = null;
+    if (amount !== undefined) {
+      amountVal = parseStrictNumber(amount, 0.01);
+      if (amountVal === null) {
+        return error(res, 'Expense amount must be a positive number', 400);
+      }
+    }
 
     const existing = await query('SELECT * FROM expenses WHERE id = ?', [id]);
     if (!existing || existing.length === 0) {
@@ -146,7 +157,7 @@ async function updateExpense(req, res, next) {
     `, [
       category ? category.trim() : null,
       description ? description.trim() : null,
-      amount !== undefined ? parseFloat(amount) : null,
+      amountVal !== null ? amountVal : null,
       payment_method || null,
       expense_date || null,
       notes !== undefined ? notes : existing[0].notes,
@@ -174,7 +185,10 @@ async function updateExpense(req, res, next) {
  */
 async function deleteExpense(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid expense ID is required', 400);
+    }
     const existing = await query('SELECT * FROM expenses WHERE id = ?', [id]);
     if (!existing || existing.length === 0) {
       return error(res, 'Expense record not found', 404);

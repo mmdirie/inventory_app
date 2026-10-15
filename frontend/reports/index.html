@@ -1,77 +1,587 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Reports Hub - Apex Inventory</title>
-  <script src="https://cdn.tailwindcss.com"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" /><link rel="stylesheet" href="/css/custom.css" />
-</head>
-<body class="bg-slate-50"><div id="app-layout">
-  <div class="mb-6"><h1 class="text-2xl font-black text-slate-900">Reports Hub</h1><p class="text-xs text-slate-500 mt-1">Explore sales, purchasing, inventory valuation, and financial summaries.</p></div>
-  <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-5 grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
-    <select id="report-type" class="px-3 py-2 text-xs border rounded-xl"><option value="sales">Sales</option><option value="purchases">Purchases</option><option value="inventory">Inventory</option><option value="financial">Financial</option></select>
-    <input id="start-date" type="date" class="px-3 py-2 text-xs border rounded-xl" /><input id="end-date" type="date" class="px-3 py-2 text-xs border rounded-xl" />
-    <select id="group-by" class="px-3 py-2 text-xs border rounded-xl"><option value="date">By date</option><option value="month">By month</option><option value="product">By product</option><option value="customer">By customer</option><option value="user">By staff</option></select>
-    <button id="run-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl"><i class="fa-solid fa-chart-line mr-2"></i>Run report</button>
-  </section>
-  <div id="report-error" class="hidden mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"></div>
-  <section id="summary" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5"></section>
-  <section id="breakdowns" class="space-y-5"></section>
-</div>
-<script src="/js/api.js"></script><script src="/js/toast.js"></script><script src="/js/auth.js"></script><script src="/js/layout.js"></script><script src="/js/ui.js"></script><script>
-Layout.init('reports');
-const reportType = document.getElementById('report-type');
-const groupBy = document.getElementById('group-by');
-const summaryNode = document.getElementById('summary');
-const breakdownNode = document.getElementById('breakdowns');
-const errorNode = document.getElementById('report-error');
-function setGroupingOptions() {
-  const groups = reportType.value === 'sales'
-    ? [['date', 'By date'], ['month', 'By month'], ['product', 'By product'], ['customer', 'By customer'], ['user', 'By staff']]
-    : [['date', 'By date'], ['supplier', 'By supplier'], ['product', 'By product']];
-  groupBy.innerHTML = groups.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
-  groupBy.disabled = reportType.value === 'inventory' || reportType.value === 'financial';
-  document.getElementById('start-date').disabled = reportType.value === 'inventory';
-  document.getElementById('end-date').disabled = reportType.value === 'inventory';
-}
-function displayValue(key, value) {
-  if (value === null || value === undefined) return '—';
-  const amountKey = /(revenue|cost|price|value|amount|paid|collected|debt|payable|profit|expense|discount|tax|subtotal|cash)/i.test(key);
-  return amountKey ? UI.money(value) : UI.escape(value);
-}
-function renderCards(record) {
-  const entries = Object.entries(record || {});
-  summaryNode.innerHTML = entries.map(([key, value]) => `<article class="bg-white rounded-2xl border border-slate-200 p-5"><p class="text-xs font-bold uppercase tracking-wide text-slate-500">${UI.escape(key.replace(/_/g, ' '))}</p><p class="text-xl font-black text-slate-900 mt-2">${displayValue(key, value)}</p></article>`).join('');
-}
-function renderTable(title, rows) {
-  if (!Array.isArray(rows)) return '';
-  if (!rows.length) return `<article class="bg-white rounded-2xl border border-slate-200 p-5"><h2 class="font-bold text-slate-900">${UI.escape(title)}</h2><p class="mt-3 text-sm text-slate-500">No data for this report.</p></article>`;
-  const columns = Object.keys(rows[0]);
-  return `<article class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"><h2 class="font-bold text-slate-900 p-5 border-b">${UI.escape(title)}</h2><div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead class="bg-slate-50 text-slate-500 uppercase"><tr>${columns.map(column => `<th class="p-4">${UI.escape(column.replace(/_/g, ' '))}</th>`).join('')}</tr></thead><tbody class="divide-y divide-slate-100">${rows.map(row => `<tr>${columns.map(column => `<td class="p-4">${displayValue(column, row[column])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></article>`;
-}
-async function loadReport() {
-  const type = reportType.value;
-  errorNode.classList.add('hidden'); summaryNode.innerHTML = ''; breakdownNode.innerHTML = '<div class="bg-white p-8 rounded-2xl border text-center text-slate-500">Generating report…</div>';
-  const params = { start_date: document.getElementById('start-date').value, end_date: document.getElementById('end-date').value };
-  if (type === 'sales' || type === 'purchases') params.group_by = groupBy.value;
-  try {
-    const response = await API.get(`/reports/${type}`, params);
-    const data = response.data;
-    if (type === 'sales' || type === 'purchases') {
-      renderCards(data.summary);
-      breakdownNode.innerHTML = renderTable(`${type === 'sales' ? 'Sales' : 'Purchase'} breakdown · ${data.group_by}`, data.breakdown);
-    } else if (type === 'inventory') {
-      renderCards(data.valuation);
-      breakdownNode.innerHTML = renderTable('Stock by category', data.category_breakdown) + renderTable('Stock by warehouse', data.warehouse_breakdown) + renderTable('Low stock items', data.low_stock_items);
-    } else {
-      renderCards(data);
-      breakdownNode.innerHTML = '';
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
+  <!-- Chart.js for data visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @media print {
+      body * { visibility: hidden !important; }
+      #printable-report-area, #printable-report-area * { visibility: visible !important; }
+      #printable-report-area {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: #fff;
+        padding: 20px;
+        display: block !important;
+      }
+      .no-print { display: none !important; }
     }
-  } catch (error) {
-    summaryNode.innerHTML = ''; breakdownNode.innerHTML = '';
-    errorNode.textContent = error.message; errorNode.classList.remove('hidden');
-  }
-}
-reportType.addEventListener('change', () => { setGroupingOptions(); });
-document.getElementById('run-btn').addEventListener('click', loadReport);
-setGroupingOptions(); loadReport();
-</script></body></html>
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div id="app-layout">
+    <div id="printable-report-area" class="p-6 space-y-6">
+
+      <!-- Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 no-print">
+        <div>
+          <h1 class="text-2xl font-black text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-chart-line text-blue-600"></i>
+            Reports Hub
+          </h1>
+          <p class="text-xs text-slate-500 mt-1">Real-time analytical insights across sales, purchasing, inventory, and finances.</p>
+        </div>
+        <button onclick="window.print()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-2 self-start sm:self-auto">
+          <i class="fa-solid fa-print"></i> Print Report
+        </button>
+      </div>
+
+      <!-- Tab Buttons -->
+      <div class="border-b border-slate-200 no-print">
+        <nav class="flex gap-2">
+          <button id="tab-sales-btn" onclick="switchReportTab('sales')" class="tab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-blue-600 text-blue-600 flex items-center gap-2">
+            <i class="fa-solid fa-cash-register"></i> Sales Analytics
+          </button>
+          <button id="tab-purchases-btn" onclick="switchReportTab('purchases')" class="tab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-cart-shopping"></i> Purchase Analytics
+          </button>
+          <button id="tab-inventory-btn" onclick="switchReportTab('inventory')" class="tab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-boxes-stacked"></i> Inventory Valuation
+          </button>
+          <button id="tab-financial-btn" onclick="switchReportTab('financial')" class="tab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-scale-balanced"></i> Financial P&amp;L
+          </button>
+        </nav>
+      </div>
+
+      <!-- Controls Strip (Date filter + Grouping) -->
+      <div id="controls-strip" class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3 no-print">
+        <div class="flex flex-wrap items-center gap-3 text-xs">
+          <div>
+            <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">From Date</label>
+            <input type="date" id="start-date" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs" />
+          </div>
+          <div>
+            <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">To Date</label>
+            <input type="date" id="end-date" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs" />
+          </div>
+          <div id="group-by-box">
+            <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Breakdown By</label>
+            <select id="group-by-select" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium bg-white">
+              <option value="date">By Date</option>
+              <option value="month">By Month</option>
+              <option value="product">By Product</option>
+              <option value="customer">By Customer</option>
+              <option value="user">By Staff / Cashier</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex items-end">
+          <button onclick="fetchActiveReport()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-2">
+            <i class="fa-solid fa-filter"></i> Apply Filters
+          </button>
+        </div>
+      </div>
+
+      <!-- DYNAMIC CONTENT CONTAINER -->
+      <div id="report-content" class="space-y-6">
+        <!-- Rendered dynamically -->
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Shared Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    Layout.init('reports');
+
+    let currentTab = 'sales';
+    let chartInstance = null;
+
+    function switchReportTab(tab) {
+      currentTab = tab;
+      ['sales', 'purchases', 'inventory', 'financial'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}-btn`);
+        btn.classList.remove('border-blue-600', 'text-blue-600');
+        btn.classList.add('border-transparent', 'text-slate-500');
+      });
+
+      const activeBtn = document.getElementById(`tab-${tab}-btn`);
+      activeBtn.classList.remove('border-transparent', 'text-slate-500');
+      activeBtn.classList.add('border-blue-600', 'text-blue-600');
+
+      // Adjust controls visibility
+      const groupByBox = document.getElementById('group-by-box');
+      const groupBySelect = document.getElementById('group-by-select');
+      const controlsStrip = document.getElementById('controls-strip');
+
+      if (tab === 'inventory') {
+        controlsStrip.classList.add('hidden');
+      } else {
+        controlsStrip.classList.remove('hidden');
+      }
+
+      if (tab === 'sales') {
+        groupByBox.classList.remove('hidden');
+        groupBySelect.innerHTML = `
+          <option value="date">By Date</option>
+          <option value="month">By Month</option>
+          <option value="product">By Product</option>
+          <option value="customer">By Customer</option>
+          <option value="user">By Staff / Cashier</option>
+        `;
+      } else if (tab === 'purchases') {
+        groupByBox.classList.remove('hidden');
+        groupBySelect.innerHTML = `
+          <option value="date">By Date</option>
+          <option value="supplier">By Supplier</option>
+          <option value="product">By Product</option>
+        `;
+      } else {
+        groupByBox.classList.add('hidden');
+      }
+
+      fetchActiveReport();
+    }
+
+    async function fetchActiveReport() {
+      const content = document.getElementById('report-content');
+      content.innerHTML = '<div class="bg-white p-12 rounded-2xl border text-center text-xs text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading report metrics...</div>';
+
+      const startDate = document.getElementById('start-date').value;
+      const endDate = document.getElementById('end-date').value;
+      const groupBy = document.getElementById('group-by-select').value;
+
+      try {
+        if (currentTab === 'sales') {
+          const res = await API.get('/reports/sales', { start_date: startDate, end_date: endDate, group_by: groupBy });
+          renderSalesReport(res.data);
+        } else if (currentTab === 'purchases') {
+          const res = await API.get('/reports/purchases', { start_date: startDate, end_date: endDate, group_by: groupBy });
+          renderPurchasesReport(res.data);
+        } else if (currentTab === 'inventory') {
+          const res = await API.get('/reports/inventory');
+          renderInventoryReport(res.data);
+        } else if (currentTab === 'financial') {
+          const res = await API.get('/reports/financial', { start_date: startDate, end_date: endDate });
+          renderFinancialReport(res.data);
+        }
+      } catch (err) {
+        content.innerHTML = `<div class="bg-rose-50 border border-rose-200 rounded-xl p-5 text-xs text-rose-700">${err.message || 'Failed to load report'}</div>`;
+      }
+    }
+
+    // ── SALES REPORT RENDERER ───────────────────────────────────────────────
+    function renderSalesReport(data) {
+      const summary = data.summary || {};
+      const breakdown = data.breakdown || [];
+
+      let html = `
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Orders Completed</span>
+            <p class="text-xl font-black text-slate-900 mt-1">${summary.total_sales_count || 0}</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Gross Revenue</span>
+            <p class="text-xl font-black text-emerald-600 mt-1">$${parseFloat(summary.total_revenue || 0).toFixed(2)}</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Cash Collected</span>
+            <p class="text-xl font-black text-blue-600 mt-1">$${parseFloat(summary.total_collected || 0).toFixed(2)}</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Credit Due / Debt</span>
+            <p class="text-xl font-black text-rose-600 mt-1">$${parseFloat(summary.total_credit_due || 0).toFixed(2)}</p>
+          </div>
+        </div>
+
+        <!-- Chart Section -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+          <h3 class="text-xs font-bold text-slate-700 uppercase mb-4">Revenue Trend / Breakdown</h3>
+          <div class="h-64">
+            <canvas id="report-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Breakdown Table -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="text-xs font-bold text-slate-800 uppercase">Detailed Ledger (${data.group_by})</h3>
+            <span class="text-[11px] text-slate-400">${breakdown.length} rows</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+                <tr>
+                  <th class="p-3">Reference / Period</th>
+                  <th class="p-3 text-right">Orders / Units</th>
+                  <th class="p-3 text-right">Total Revenue</th>
+                  ${data.group_by === 'customer' || data.group_by === 'date' ? '<th class="p-3 text-right">Collected</th><th class="p-3 text-right">Debt</th>' : ''}
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${breakdown.map(row => `
+                  <tr class="hover:bg-slate-50/60">
+                    <td class="p-3 font-semibold text-slate-900">${row.period || row.product_name || row.customer_name || row.staff_name || '—'}</td>
+                    <td class="p-3 text-right text-slate-600">${row.total_orders || row.total_units_sold || '—'}</td>
+                    <td class="p-3 text-right font-black text-emerald-600">$${parseFloat(row.total_revenue || 0).toFixed(2)}</td>
+                    ${row.total_collected !== undefined ? `<td class="p-3 text-right font-bold text-blue-600">$${parseFloat(row.total_collected || 0).toFixed(2)}</td>` : ''}
+                    ${row.total_debt !== undefined || row.total_credit !== undefined ? `<td class="p-3 text-right font-bold text-rose-500">$${parseFloat(row.total_debt || row.total_credit || 0).toFixed(2)}</td>` : ''}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('report-content').innerHTML = html;
+
+      // Draw Chart
+      setTimeout(() => {
+        const labels = breakdown.slice(0, 15).map(r => r.period || r.product_name || r.customer_name || r.staff_name || '');
+        const values = breakdown.slice(0, 15).map(r => parseFloat(r.total_revenue || 0));
+
+        if (chartInstance) chartInstance.destroy();
+        const ctx = document.getElementById('report-chart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Revenue ($)',
+              data: values,
+              backgroundColor: '#3b82f6',
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      }, 50);
+    }
+
+    // ── PURCHASES REPORT RENDERER ───────────────────────────────────────────
+    function renderPurchasesReport(data) {
+      const summary = data.summary || {};
+      const breakdown = data.breakdown || [];
+
+      let html = `
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Total POs</span>
+            <p class="text-xl font-black text-slate-900 mt-1">${summary.total_purchases_count || 0}</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Total Expenditure</span>
+            <p class="text-xl font-black text-slate-900 mt-1">$${parseFloat(summary.total_cost || 0).toFixed(2)}</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Paid to Suppliers</span>
+            <p class="text-xl font-black text-emerald-600 mt-1">$${parseFloat(summary.total_paid || 0).toFixed(2)}</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Payables Outstanding</span>
+            <p class="text-xl font-black text-amber-600 mt-1">$${parseFloat(summary.total_payable || 0).toFixed(2)}</p>
+          </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+          <h3 class="text-xs font-bold text-slate-700 uppercase mb-4">Purchasing Breakdown</h3>
+          <div class="h-64">
+            <canvas id="report-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="text-xs font-bold text-slate-800 uppercase">Purchases Ledger (${data.group_by})</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+                <tr>
+                  <th class="p-3">Reference / Supplier / Product</th>
+                  <th class="p-3 text-right">Orders / Qty</th>
+                  <th class="p-3 text-right">Total Cost</th>
+                  <th class="p-3 text-right">Paid</th>
+                  <th class="p-3 text-right">Remaining</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${breakdown.map(row => `
+                  <tr class="hover:bg-slate-50/60">
+                    <td class="p-3 font-semibold text-slate-900">${row.period || row.supplier_name || row.product_name || '—'}</td>
+                    <td class="p-3 text-right text-slate-600">${row.total_orders || row.total_units_purchased || '—'}</td>
+                    <td class="p-3 text-right font-black text-slate-900">$${parseFloat(row.total_cost || row.total_expenditure || 0).toFixed(2)}</td>
+                    <td class="p-3 text-right font-bold text-emerald-600">$${parseFloat(row.total_paid || 0).toFixed(2)}</td>
+                    <td class="p-3 text-right font-bold text-amber-600">$${parseFloat(row.total_remaining || 0).toFixed(2)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('report-content').innerHTML = html;
+
+      setTimeout(() => {
+        const labels = breakdown.slice(0, 15).map(r => r.period || r.supplier_name || r.product_name || '');
+        const values = breakdown.slice(0, 15).map(r => parseFloat(r.total_cost || r.total_expenditure || 0));
+
+        if (chartInstance) chartInstance.destroy();
+        const ctx = document.getElementById('report-chart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Purchases ($)',
+              data: values,
+              backgroundColor: '#6366f1',
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      }, 50);
+    }
+
+    // ── INVENTORY VALUATION RENDERER ────────────────────────────────────────
+    function renderInventoryReport(data) {
+      const v = data.valuation || {};
+      const cat = data.category_breakdown || [];
+      const wh = data.warehouse_breakdown || [];
+      const low = data.low_stock_items || [];
+
+      let html = `
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Catalog Products</span>
+            <p class="text-xl font-black text-slate-900 mt-1">${v.total_items || 0}</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Total Units in Stock</span>
+            <p class="text-xl font-black text-slate-900 mt-1">${v.total_stock_units || 0}</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Cost Valuation</span>
+            <p class="text-xl font-black text-indigo-600 mt-1">$${parseFloat(v.total_cost_value || 0).toFixed(2)}</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Retail Valuation</span>
+            <p class="text-xl font-black text-emerald-600 mt-1">$${parseFloat(v.total_retail_value || 0).toFixed(2)}</p>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Potential Margin</span>
+            <p class="text-xl font-black text-blue-600 mt-1">$${parseFloat(v.total_potential_profit || 0).toFixed(2)}</p>
+          </div>
+        </div>
+
+        <!-- Breakdown Grids -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- By Category -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+            <h3 class="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+              <i class="fa-solid fa-tags text-blue-600"></i> Stock by Category
+            </h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 uppercase font-bold">
+                  <tr><th class="p-2.5">Category</th><th class="p-2.5 text-right">Items</th><th class="p-2.5 text-right">Units</th><th class="p-2.5 text-right">Value</th></tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${cat.map(c => `
+                    <tr>
+                      <td class="p-2.5 font-semibold text-slate-800">${c.category_name || 'Uncategorized'}</td>
+                      <td class="p-2.5 text-right text-slate-600">${c.product_count}</td>
+                      <td class="p-2.5 text-right font-bold text-slate-700">${c.total_units}</td>
+                      <td class="p-2.5 text-right font-black text-emerald-600">$${parseFloat(c.total_cost_value || 0).toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- By Warehouse -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+            <h3 class="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+              <i class="fa-solid fa-warehouse text-emerald-600"></i> Stock by Facility
+            </h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 uppercase font-bold">
+                  <tr><th class="p-2.5">Warehouse</th><th class="p-2.5 text-right">Products</th><th class="p-2.5 text-right">Units</th><th class="p-2.5 text-right">Value</th></tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${wh.map(w => `
+                    <tr>
+                      <td class="p-2.5 font-semibold text-slate-800">${w.warehouse_name}</td>
+                      <td class="p-2.5 text-right text-slate-600">${w.product_count}</td>
+                      <td class="p-2.5 text-right font-bold text-slate-700">${w.total_units}</td>
+                      <td class="p-2.5 text-right font-black text-indigo-600">$${parseFloat(w.warehouse_stock_value || 0).toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Low Stock Items Warning List -->
+        <div class="bg-white rounded-2xl border border-rose-200/80 shadow-sm overflow-hidden">
+          <div class="p-4 bg-rose-50/60 border-b border-rose-100 flex items-center justify-between">
+            <h3 class="text-xs font-bold text-rose-800 uppercase flex items-center gap-2">
+              <i class="fa-solid fa-triangle-exclamation text-rose-600"></i> Low Stock Reorder Alerts (${low.length})
+            </h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-100">
+                <tr><th class="p-3">SKU</th><th class="p-3">Product Name</th><th class="p-3">Category</th><th class="p-3 text-right">Current Stock</th><th class="p-3 text-right">Min Level</th><th class="p-3 text-center">Status</th></tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${low.length ? low.map(item => `
+                  <tr class="hover:bg-rose-50/30">
+                    <td class="p-3 font-mono font-bold text-slate-700">${item.sku}</td>
+                    <td class="p-3 font-semibold text-slate-900">${item.name}</td>
+                    <td class="p-3 text-slate-500">${item.category_name || '—'}</td>
+                    <td class="p-3 text-right font-black text-rose-600">${item.current_stock} ${item.unit}</td>
+                    <td class="p-3 text-right text-slate-500">${item.min_stock_level} ${item.unit}</td>
+                    <td class="p-3 text-center">
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${item.current_stock === 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}">
+                        ${item.current_stock === 0 ? 'OUT OF STOCK' : 'LOW STOCK'}
+                      </span>
+                    </td>
+                  </tr>
+                `).join('') : '<tr><td colspan="6" class="p-6 text-center text-slate-400">All products have healthy inventory levels!</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('report-content').innerHTML = html;
+    }
+
+    // ── FINANCIAL P&L RENDERER ──────────────────────────────────────────────
+    function renderFinancialReport(data) {
+      const revenue = parseFloat(data.revenue || 0);
+      const purchases = parseFloat(data.purchases || 0);
+      const expenses = parseFloat(data.expenses || 0);
+      const netProfit = parseFloat(data.net_profit || 0);
+
+      let html = `
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Total Sales Revenue</span>
+            <p class="text-2xl font-black text-emerald-600 mt-1">$${revenue.toFixed(2)}</p>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Cost of Purchases</span>
+            <p class="text-2xl font-black text-slate-900 mt-1">$${purchases.toFixed(2)}</p>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Operating Expenses</span>
+            <p class="text-2xl font-black text-rose-600 mt-1">$${expenses.toFixed(2)}</p>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Net P&amp;L Profit</span>
+            <p class="text-2xl font-black ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'} mt-1">$${netProfit.toFixed(2)}</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+            <h3 class="text-xs font-bold text-slate-700 uppercase mb-4">Financial Outlay Distribution</h3>
+            <div class="h-64 flex justify-center">
+              <canvas id="financial-doughnut"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+            <h3 class="text-xs font-bold text-slate-700 uppercase">Cash &amp; Working Capital Liquidity</h3>
+            <div class="space-y-3 text-xs">
+              <div class="p-3 bg-slate-50 rounded-xl flex justify-between items-center">
+                <span class="text-slate-600">Cash Collected from Customers:</span>
+                <span class="font-black text-emerald-600 text-sm">$${parseFloat(data.collected_cash || 0).toFixed(2)}</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl flex justify-between items-center">
+                <span class="text-slate-600">Disbursed for Purchases:</span>
+                <span class="font-black text-slate-900 text-sm">$${parseFloat(data.disbursed_purchases || 0).toFixed(2)}</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl flex justify-between items-center">
+                <span class="text-slate-600">Customer Debts (Receivable Asset):</span>
+                <span class="font-black text-blue-600 text-sm">$${parseFloat(data.customer_debt_receivable || 0).toFixed(2)}</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl flex justify-between items-center">
+                <span class="text-slate-600">Supplier Debts (Payable Liability):</span>
+                <span class="font-black text-rose-600 text-sm">$${parseFloat(data.supplier_debt_payable || 0).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('report-content').innerHTML = html;
+
+      setTimeout(() => {
+        if (chartInstance) chartInstance.destroy();
+        const ctx = document.getElementById('financial-doughnut').getContext('2d');
+        chartInstance = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Purchases', 'Operating Expenses', 'Net Profit Margin'],
+            datasets: [{
+              data: [purchases, expenses, Math.max(0, netProfit)],
+              backgroundColor: ['#6366f1', '#f43f5e', '#10b981']
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } }
+          }
+        });
+      }, 50);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Default dates: last 30 days
+      const end = new Date();
+      const start = new Date();
+      start.setDate(end.getDate() - 30);
+
+      document.getElementById('end-date').value = end.toISOString().slice(0, 10);
+      document.getElementById('start-date').value = start.toISOString().slice(0, 10);
+
+      fetchActiveReport();
+    });
+  </script>
+</body>
+</html>

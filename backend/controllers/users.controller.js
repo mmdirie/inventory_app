@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const { query } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired, isValidEmail } = require('../validators/input.validator');
+const { validateRequired, isValidEmail, isValidPassword, validateId, parsePagination } = require('../validators/input.validator');
 
 /**
  * GET /api/users
@@ -47,7 +47,10 @@ async function getAllUsers(req, res, next) {
  */
 async function getUserById(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid user ID is required', 400);
+    }
     const rows = await query('SELECT id, name, email, role, phone, status, last_login, created_at, updated_at FROM users WHERE id = ?', [id]);
     if (!rows || rows.length === 0) {
       return error(res, 'User not found', 404);
@@ -78,8 +81,8 @@ async function createUser(req, res, next) {
       return error(res, 'Invalid email address', 400);
     }
 
-    if (password.length < 6) {
-      return error(res, 'Password must be at least 6 characters', 400);
+    if (!isValidPassword(password)) {
+      return error(res, 'Password must be at least 8 characters long and contain both letters and numbers', 400);
     }
 
     const validRoles = ['Admin', 'Manager', 'Sales', 'Inventory', 'Accountant'];
@@ -126,7 +129,10 @@ async function createUser(req, res, next) {
  */
 async function updateUser(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid user ID is required', 400);
+    }
     const { name, email, role, phone, status, new_password } = req.body;
 
     const existing = await query('SELECT * FROM users WHERE id = ?', [id]);
@@ -146,8 +152,8 @@ async function updateUser(req, res, next) {
 
     let passwordHash = existing[0].password_hash;
     if (new_password && new_password.trim() !== '') {
-      if (new_password.length < 6) {
-        return error(res, 'Password must be at least 6 characters', 400);
+      if (!isValidPassword(new_password)) {
+        return error(res, 'Password must be at least 8 characters long and contain both letters and numbers', 400);
       }
       passwordHash = await bcrypt.hash(new_password, 10);
     }
@@ -192,7 +198,10 @@ async function updateUser(req, res, next) {
  */
 async function toggleUserStatus(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid user ID is required', 400);
+    }
     const { status } = req.body;
 
     if (status !== 'active' && status !== 'inactive') {
@@ -225,8 +234,8 @@ async function toggleUserStatus(req, res, next) {
  */
 async function getAuditLogs(req, res, next) {
   try {
-    const { module, user_id, page = 1, limit = 50 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { module, user_id } = req.query;
+    const { page, limit, offset } = parsePagination(req.query, 50, 100);
     const params = [];
     const where = [];
 
@@ -250,15 +259,15 @@ async function getAuditLogs(req, res, next) {
       ${whereClause} 
       ORDER BY id DESC 
       LIMIT ? OFFSET ?
-    `, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    `, [...params, limit, offset]);
 
     return success(res, {
       logs,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Audit logs fetched');
   } catch (err) {

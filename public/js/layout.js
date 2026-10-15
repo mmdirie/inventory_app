@@ -3,6 +3,15 @@
  * Builds standard Sidebar, Topbar, and Mobile Navigation
  */
 const Layout = (function() {
+  function escapeHtml(val) {
+    if (typeof UI !== 'undefined' && typeof UI.escape === 'function') {
+      return UI.escape(val);
+    }
+    return String(val == null ? '' : val).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
   function init(activeKey = 'dashboard') {
     if (!Auth.requireAuth()) return;
 
@@ -10,7 +19,11 @@ const Layout = (function() {
     const container = document.getElementById('app-layout');
     if (!container) return;
 
-    const currentPath = window.location.pathname;
+    const safeUserName = escapeHtml(user.name || 'User');
+    const safeUserRole = escapeHtml(user.role || 'Staff');
+    const safeUserEmail = escapeHtml(user.email || '');
+    const userInitial = escapeHtml((user.name || 'U').trim().charAt(0).toUpperCase() || 'U');
+    const safeActiveKey = escapeHtml(String(activeKey).replace(/[-_]/g, ' '));
 
     const navGroups = [
       {
@@ -79,7 +92,7 @@ const Layout = (function() {
       if (allowedItems.length === 0) continue;
 
       navHtml += `
-        <div class="px-4 mt-6 mb-2 text-[11px] font-bold tracking-wider text-slate-400 uppercase">${group.title}</div>
+        <div class="px-4 mt-6 mb-2 text-[11px] font-bold tracking-wider text-slate-400 uppercase">${escapeHtml(group.title)}</div>
         <div class="space-y-1 px-3">
       `;
 
@@ -90,12 +103,12 @@ const Layout = (function() {
           : 'text-slate-300 hover:text-white hover:bg-slate-800/80 font-medium';
 
         navHtml += `
-          <a href="${item.href}" class="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition-all group ${activeClass}">
+          <a href="${escapeHtml(item.href)}" class="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition-all group ${activeClass}">
             <div class="flex items-center space-x-3 truncate">
-              <i class="fa-solid ${item.icon} text-base w-5 text-center ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}"></i>
-              <span class="truncate">${item.label}</span>
+              <i class="fa-solid ${escapeHtml(item.icon)} text-base w-5 text-center ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}"></i>
+              <span class="truncate">${escapeHtml(item.label)}</span>
             </div>
-            ${item.badge ? `<span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500 text-white">${item.badge}</span>` : ''}
+            ${item.badge ? `<span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500 text-white">${escapeHtml(item.badge)}</span>` : ''}
           </a>
         `;
       }
@@ -146,11 +159,11 @@ const Layout = (function() {
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-3 truncate">
                 <div class="w-9 h-9 rounded-full bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center font-bold text-sm shrink-0">
-                  ${user.name.charAt(0).toUpperCase()}
+                  ${userInitial}
                 </div>
                 <div class="truncate">
-                  <div class="text-xs font-semibold text-white truncate">${user.name}</div>
-                  <div class="text-[11px] text-slate-400 truncate">${user.role}</div>
+                  <div class="text-xs font-semibold text-white truncate">${safeUserName}</div>
+                  <div class="text-[11px] text-slate-400 truncate">${safeUserRole}</div>
                 </div>
               </div>
               <button onclick="Auth.logout()" title="Logout" class="p-2 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800/60 transition">
@@ -175,7 +188,7 @@ const Layout = (function() {
               <div class="flex items-center space-x-2 text-sm text-slate-500">
                 <a href="/dashboard.html" class="hover:text-blue-600 font-medium">Home</a>
                 <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
-                <span class="text-slate-900 font-semibold capitalize">${activeKey.replace('-', ' ')}</span>
+                <span class="text-slate-900 font-semibold capitalize">${safeActiveKey}</span>
               </div>
             </div>
 
@@ -200,11 +213,11 @@ const Layout = (function() {
               <div class="relative">
                 <button id="user-menu-btn" class="flex items-center space-x-3 p-1.5 rounded-lg hover:bg-slate-100 transition focus:outline-none">
                   <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 border border-blue-200 flex items-center justify-center font-bold text-xs">
-                    ${user.name.charAt(0).toUpperCase()}
+                    ${userInitial}
                   </div>
                   <div class="hidden md:block text-left">
-                    <span class="block text-xs font-semibold text-slate-800 leading-tight">${user.name}</span>
-                    <span class="inline-block text-[10px] font-medium px-1.5 py-0.2 rounded border ${roleBadge}">${user.role}</span>
+                    <span class="block text-xs font-semibold text-slate-800 leading-tight">${safeUserName}</span>
+                    <span class="inline-block text-[10px] font-medium px-1.5 py-0.2 rounded border ${roleBadge}">${safeUserRole}</span>
                   </div>
                   <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 hidden md:block"></i>
                 </button>
@@ -212,8 +225,8 @@ const Layout = (function() {
                 <!-- Profile Dropdown Menu -->
                 <div id="user-dropdown-menu" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-50">
                   <div class="px-4 py-2 border-b border-slate-100">
-                    <div class="text-xs font-bold text-slate-800">${user.name}</div>
-                    <div class="text-[11px] text-slate-500 truncate">${user.email || ''}</div>
+                    <div class="text-xs font-bold text-slate-800">${safeUserName}</div>
+                    <div class="text-[11px] text-slate-500 truncate">${safeUserEmail}</div>
                   </div>
                   <a href="/dashboard.html" class="flex items-center px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">
                     <i class="fa-solid fa-chart-pie w-5 text-slate-400"></i> Dashboard
@@ -257,8 +270,8 @@ const Layout = (function() {
               <input type="password" id="cur-pwd-input" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1">New Password (Min 6 chars)</label>
-              <input type="password" id="new-pwd-input" required minlength="6" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+              <label class="block text-xs font-semibold text-slate-700 mb-1">New Password (Min 8 chars, letters &amp; numbers)</label>
+              <input type="password" id="new-pwd-input" required minlength="8" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
             </div>
             <div class="flex justify-end space-x-2 pt-2">
               <button type="button" onclick="Layout.closePasswordModal()" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
@@ -313,11 +326,20 @@ const Layout = (function() {
         e.preventDefault();
         const current_password = document.getElementById('cur-pwd-input').value;
         const new_password = document.getElementById('new-pwd-input').value;
+
+        if (new_password.length < 8 || !/[a-zA-Z]/.test(new_password) || !/[0-9]/.test(new_password)) {
+          Toast.error('Password must be at least 8 characters long and contain both letters and numbers.');
+          return;
+        }
+
         try {
           await API.put('/auth/change-password', { current_password, new_password });
-          Toast.success('Password changed successfully');
+          Toast.success('Password changed successfully. Please log in again.');
           Layout.closePasswordModal();
           pwdForm.reset();
+          setTimeout(() => {
+            Auth.logout();
+          }, 1500);
         } catch (err) {
           Toast.error(err.message);
         }
