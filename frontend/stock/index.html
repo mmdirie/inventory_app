@@ -189,7 +189,9 @@
         const optHtml = '<option value="">All Warehouses</option>' + whs.map(w => `<option value="${UI.escape(w.id)}">${UI.escape(w.name)}</option>`).join('');
         document.getElementById('stock-wh-filter').innerHTML = optHtml;
         document.getElementById('movement-wh-filter').innerHTML = optHtml;
-      } catch (e) {}
+      } catch (err) {
+        Toast.error(`Failed to load warehouse filters: ${err.message}`);
+      }
     }
 
     async function loadStock() {

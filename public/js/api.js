@@ -38,10 +38,18 @@ const API = (function() {
         throw new Error('Session expired. Please log in again.');
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+        throw new Error('The server returned an invalid JSON response.');
+      }
 
-      if (!response.ok || data.success === false) {
-        const errorMsg = data.message || `Request failed with status ${response.status}`;
+      if (!response.ok || data?.success === false) {
+        const errorMsg = data?.message || `Request failed with status ${response.status}`;
         throw new Error(errorMsg);
       }
 

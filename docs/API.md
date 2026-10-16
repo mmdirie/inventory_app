@@ -50,9 +50,10 @@ Authorization: Bearer <jwt_token>
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
 | `GET` | `/api/products` | `products.view` | Query products with pagination, search, category, brand, warehouse, and low-stock filter; warehouse-filtered results include `warehouse_quantity` |
+| `GET` | `/api/products/barcode/:barcode` | `products.view` | Look up an active product by its exact barcode |
 | `GET` | `/api/products/:id` | `products.view` | Get product details including warehouse stock breakdown |
 | `POST` | `/api/products` | `products.create` | Create new product (validates unique SKU and barcode) |
-| `PUT` | `/api/products/:id` | `products.edit` | Update product information |
+| `PUT` | `/api/products/:id` | `products.update` | Update product information |
 | `DELETE`| `/api/products/:id` | `products.delete` | Soft delete / deactivate product |
 
 ---
@@ -62,13 +63,15 @@ Authorization: Bearer <jwt_token>
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
 | `GET` | `/api/categories` | `categories.view` | List product categories with product counts |
-| `POST` | `/api/categories` | `categories.create` | Add new category |
-| `PUT` | `/api/categories/:id`| `categories.edit` | Edit category name & description |
-| `DELETE`| `/api/categories/:id`| `categories.delete`| Remove category |
+| `GET` | `/api/categories/:id` | `categories.view` | Get category details |
+| `POST` | `/api/categories` | `categories.manage` | Add new category |
+| `PUT` | `/api/categories/:id`| `categories.manage` | Edit category name & description |
+| `DELETE`| `/api/categories/:id`| `categories.manage`| Remove category |
 | `GET` | `/api/brands` | `brands.view` | List registered brands |
-| `POST` | `/api/brands` | `brands.create` | Create new brand |
-| `PUT` | `/api/brands/:id` | `brands.edit` | Update brand details |
-| `DELETE`| `/api/brands/:id` | `brands.delete` | Delete brand |
+| `GET` | `/api/brands/:id` | `brands.view` | Get brand details |
+| `POST` | `/api/brands` | `brands.manage` | Create new brand |
+| `PUT` | `/api/brands/:id` | `brands.manage` | Update brand details |
+| `DELETE`| `/api/brands/:id` | `brands.manage` | Delete brand |
 
 ---
 
@@ -80,6 +83,7 @@ Authorization: Bearer <jwt_token>
 | `GET` | `/api/warehouses/:id`| `warehouses.view` | Facility details with current stock inventory |
 | `POST` | `/api/warehouses` | `warehouses.manage` | Add new warehouse facility |
 | `PUT` | `/api/warehouses/:id`| `warehouses.manage` | Update facility details or change manager |
+| `DELETE` | `/api/warehouses/:id` | `warehouses.manage` | Delete a warehouse when no restricted stock or transaction references remain |
 
 ---
 
@@ -88,11 +92,15 @@ Authorization: Bearer <jwt_token>
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
 | `GET` | `/api/suppliers` | `suppliers.view` | List suppliers with balance and purchase counts |
+| `GET` | `/api/suppliers/:id` | `suppliers.view` | Get supplier details |
 | `POST` | `/api/suppliers` | `suppliers.manage` | Register new supplier |
 | `PUT` | `/api/suppliers/:id` | `suppliers.manage` | Update supplier profile |
+| `DELETE` | `/api/suppliers/:id` | `suppliers.manage` | Delete supplier when related records permit |
 | `GET` | `/api/customers` | `customers.view` | List customers with credit limits and balances |
+| `GET` | `/api/customers/:id` | `customers.view` | Get customer details |
 | `POST` | `/api/customers` | `customers.manage` | Create customer profile |
 | `PUT` | `/api/customers/:id` | `customers.manage` | Edit customer contact and credit terms |
+| `DELETE` | `/api/customers/:id` | `customers.manage` | Delete customer when related records permit |
 
 ---
 
@@ -116,20 +124,23 @@ Authorization: Bearer <jwt_token>
 
 Sale creation requires an `Idempotency-Key` header containing 8–128 safe characters. Repeating the same key and request returns the original sale; reusing a key with a different request returns `409 Conflict`. The POS register generates and reuses this key automatically when retrying a submission.
 
+`GET /api/sales` supports `page`, `limit`, `search` (invoice number or customer), `customer_id`, `warehouse_id`, `payment_status`, `payment_method`, `start_date`, and `end_date`. Date filters must be valid `YYYY-MM-DD` dates, and the start date cannot be after the end date.
+
 ---
 
 ## 9. Inventory Ledger (`/api/stock`, `/api/transfers`, `/api/adjustments`)
 
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
-| `GET` | `/api/stock/overview` | `stock.view` | Consolidated inventory counts by warehouse |
-| `GET` | `/api/stock/movements`| `stock.view` | Double-entry stock audit log |
-| `GET` | `/api/stock/low-stock`| `stock.view` | Products below minimum safety reorder thresholds |
+| `GET` | `/api/stock` | `stock.view` | Consolidated inventory counts by warehouse |
+| `GET` | `/api/stock/movements`| `stock.view` | Stock movement audit log |
+| `GET` | `/api/stock/low`| `stock.view` | Products below minimum safety reorder thresholds |
 | `GET` | `/api/transfers` | `stock.view` | Inter-warehouse stock transfers |
-| `POST` | `/api/transfers` | `stock.manage` | Initiate inter-warehouse transfer |
-| `PUT` | `/api/transfers/:id/status` | `stock.manage` | Approve or Complete transfer (moves stock atomically) |
+| `GET` | `/api/transfers/:id` | `stock.view` | Transfer details and items |
+| `POST` | `/api/transfers` | `stock.transfer` | Initiate inter-warehouse transfer |
+| `PUT` | `/api/transfers/:id/status` | `stock.transfer` | Update transfer status (stock moves atomically on completion) |
 | `GET` | `/api/adjustments` | `stock.view` | List stock audit count corrections |
-| `POST` | `/api/adjustments` | `stock.manage` | Commit stock adjustment with reason |
+| `POST` | `/api/adjustments` | `stock.adjust` | Commit stock adjustment with reason |
 
 ---
 
@@ -149,9 +160,10 @@ Sale creation requires an `Idempotency-Key` header containing 8–128 safe chara
 |---|---|---|---|
 | `GET` | `/api/expenses` | `expenses.view` | Operating expenses with category filters |
 | `POST` | `/api/expenses` | `expenses.manage`| Record overhead expense |
+| `PUT` | `/api/expenses/:id` | `expenses.manage` | Update an expense entry |
 | `DELETE`| `/api/expenses/:id` | `expenses.manage`| Delete expense entry |
 | `GET` | `/api/payments` | `payments.view` | Unified payments ledger |
-| `POST` | `/api/payments` | `payments.create`| Record manual customer/supplier payment |
+| `POST` | `/api/payments` | `payments.manage`| Record manual customer/supplier payment |
 | `GET` | `/api/invoices` | `invoices.view` | Search and list sales invoices |
 | `GET` | `/api/invoices/:id` | `invoices.view` | Printable A4 invoice layout data with business settings |
 | `GET` | `/api/debts` | `debts.view` | Customer receivables and supplier payables |
@@ -175,11 +187,12 @@ Sale creation requires an `Idempotency-Key` header containing 8–128 safe chara
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
 | `GET` | `/api/users` | `users.manage` | List organization staff accounts |
+| `GET` | `/api/users/:id` | `users.manage` | Get an individual staff account |
 | `POST` | `/api/users` | `users.manage` | Provision new employee account with role |
 | `PUT` | `/api/users/:id` | `users.manage` | Update user role and contact |
 | `PUT` | `/api/users/:id/status`| `users.manage`| Toggle active/inactive account status |
 | `GET` | `/api/users/audit-logs` | `users.manage`| Paginated administrative audit logs |
-| `GET` | `/api/settings` | Public | Read organization business preferences |
+| `GET` | `/api/settings` | Authenticated | Read organization business preferences |
 | `PUT` | `/api/settings` | `settings.manage`| Update business name, tax rate, currency, invoice prefix |
 | `GET` | `/api/barcode/lookup/:code` | `products.view`| Fast scan lookup by barcode or SKU |
-| `GET` | `/api/barcode/generate-suggested`| `products.view`| Generates verified unique EAN-13 candidate |
+| `GET` | `/api/barcode/generate-suggested`| `products.create`| Generates a unique EAN-13 candidate |

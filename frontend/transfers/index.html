@@ -139,7 +139,9 @@
         if (cachedWarehouses.length > 1) {
           document.getElementById('tr-dest').selectedIndex = 1;
         }
-      } catch (e) {}
+      } catch (err) {
+        Toast.error(`Failed to load transfer options: ${err.message}`);
+      }
     }
 
     async function loadTransfers() {

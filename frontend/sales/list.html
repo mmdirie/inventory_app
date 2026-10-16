@@ -24,7 +24,7 @@
 
     <!-- FILTERS -->
     <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-6">
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
         <div class="relative">
           <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
             <i class="fa-solid fa-magnifying-glass text-xs"></i>
@@ -48,6 +48,14 @@
           <option value="Partially Paid">Partially Paid</option>
           <option value="Unpaid">Unpaid</option>
         </select>
+        <label class="text-xs text-slate-500">
+          From
+          <input type="date" id="start-date-filter" class="mt-1 w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </label>
+        <label class="text-xs text-slate-500">
+          To
+          <input type="date" id="end-date-filter" class="mt-1 w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </label>
       </div>
     </div>
 
@@ -123,6 +131,8 @@
     let currentPage = 1;
     const limit = 15;
     let currentInvoiceData = null;
+    let salesSearchTimer = null;
+    let salesRequestId = 0;
 
     async function initFilters() {
       try {
@@ -136,18 +146,32 @@
     }
 
     async function loadSales(page = 1) {
-      currentPage = page;
+      const requestId = ++salesRequestId;
       const search = document.getElementById('search-input').value.trim();
       const warehouse_id = document.getElementById('warehouse-filter').value;
       const payment_method = document.getElementById('payment-method-filter').value;
       const payment_status = document.getElementById('status-filter').value;
+      const start_date = document.getElementById('start-date-filter').value;
+      const end_date = document.getElementById('end-date-filter').value;
+      const tbody = document.getElementById('sales-tbody');
+      const paginationInfo = document.getElementById('pagination-info');
+      const previousButton = document.getElementById('prev-page-btn');
+      const nextButton = document.getElementById('next-page-btn');
+      tbody.innerHTML = '<tr><td colspan="10" class="px-5 py-8 text-center text-slate-400">Loading sales records...</td></tr>';
+      paginationInfo.innerText = 'Loading sales...';
+      previousButton.disabled = true;
+      nextButton.disabled = true;
 
       try {
-        const res = await API.get('/sales', { page, limit, search, warehouse_id, payment_method, payment_status });
+        const res = await API.get('/sales', { page, limit, search, warehouse_id, payment_method, payment_status, start_date, end_date });
+        if (requestId !== salesRequestId) return;
         const { sales, pagination } = res.data;
-        const tbody = document.getElementById('sales-tbody');
+        const totalRecords = Number(pagination?.total ?? 0);
+        const responsePage = Number(pagination?.page) || page;
+        const totalPages = Number(pagination?.total_pages) || (totalRecords > 0 ? Math.ceil(totalRecords / limit) : 1);
+        currentPage = responsePage;
 
-        if (sales.length === 0) {
+        if (!Array.isArray(sales) || sales.length === 0) {
           tbody.innerHTML = `
             <tr>
               <td colspan="10" class="px-5 py-10 text-center">
@@ -158,6 +182,10 @@
                   </a>` : ''}
               </td>
             </tr>`;
+          paginationInfo.innerText = `Showing 0 of ${totalRecords} sales`;
+          document.getElementById('current-page-num').innerText = String(responsePage);
+          previousButton.disabled = responsePage <= 1 || totalRecords === 0;
+          nextButton.disabled = true;
           return;
         }
 
@@ -186,12 +214,25 @@
           `;
         }).join('');
 
-        document.getElementById('pagination-info').innerText = `Showing ${sales.length} of ${pagination.total} sales`;
-        document.getElementById('current-page-num').innerText = pagination.page;
-        document.getElementById('prev-page-btn').disabled = pagination.page <= 1;
-        document.getElementById('next-page-btn').disabled = pagination.page >= pagination.total_pages;
+        paginationInfo.innerText = `Showing ${sales.length} of ${totalRecords} sales`;
+        document.getElementById('current-page-num').innerText = String(responsePage);
+        previousButton.disabled = responsePage <= 1;
+        nextButton.disabled = responsePage >= totalPages;
 
       } catch (err) {
+        if (requestId !== salesRequestId) return;
+        currentPage = page;
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="px-5 py-8 text-center">
+              <p class="text-sm text-rose-600">${UI.escape(err.message)}</p>
+              <button type="button" onclick="loadSales(${page})" class="mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Retry</button>
+            </td>
+          </tr>`;
+        paginationInfo.innerText = 'Sales could not be loaded';
+        document.getElementById('current-page-num').innerText = String(page);
+        previousButton.disabled = true;
+        nextButton.disabled = true;
         Toast.error(err.message);
       }
     }
@@ -264,10 +305,22 @@
       }
     }
 
-    document.getElementById('search-input').addEventListener('input', () => loadSales(1));
+    document.getElementById('search-input').addEventListener('input', () => {
+      clearTimeout(salesSearchTimer);
+      salesSearchTimer = setTimeout(() => loadSales(1), 300);
+    });
     document.getElementById('warehouse-filter').addEventListener('change', () => loadSales(1));
     document.getElementById('payment-method-filter').addEventListener('change', () => loadSales(1));
     document.getElementById('status-filter').addEventListener('change', () => loadSales(1));
+    document.getElementById('start-date-filter').addEventListener('change', () => loadSales(1));
+    document.getElementById('end-date-filter').addEventListener('change', () => loadSales(1));
+    document.getElementById('prev-page-btn').addEventListener('click', () => {
+      if (currentPage > 1) loadSales(currentPage - 1);
+    });
+    document.getElementById('next-page-btn').addEventListener('click', () => {
+      if (document.getElementById('next-page-btn').disabled) return;
+      loadSales(currentPage + 1);
+    });
 
     document.addEventListener('DOMContentLoaded', async () => {
       if (!Auth.hasPermission('sales.create')) {

@@ -572,35 +572,63 @@
       return { subtotal, discount, tax, grandTotal };
     }
 
+    async function handleBarcodeScan(code) {
+      if (!code) return;
+      const warehouseId = Number(warehouseSelect.value);
+      if (!warehouseId) {
+        Toast.error('Select an active warehouse before scanning products.');
+        return;
+      }
+
+      try {
+        const productRes = await API.get(`/barcode/lookup/${encodeURIComponent(code)}`);
+        const product = productRes.data;
+        const warehouseStock = Array.isArray(product.warehouse_stock)
+          ? product.warehouse_stock.find(item => Number(item.warehouse_id) === warehouseId)
+          : null;
+        const availableStock = warehouseStock ? Number(warehouseStock.quantity) : 0;
+
+        if (!product || !product.id) {
+          throw new Error('No active product found for this code.');
+        }
+
+        if (availableStock <= 0) {
+          Toast.error(`"${product.name}" has no available stock in the selected warehouse.`);
+          return;
+        }
+
+        const catalogItem = {
+          ...product,
+          id: Number(product.id),
+          warehouse_quantity: availableStock,
+          current_stock: availableStock,
+          selling_price: Number(product.selling_price),
+          unit: product.unit || 'unit'
+        };
+
+        if (!catalog.some(item => Number(item.id) === Number(catalogItem.id))) {
+          catalog.push(catalogItem);
+        } else {
+          const existing = catalog.find(item => Number(item.id) === Number(catalogItem.id));
+          existing.warehouse_quantity = availableStock;
+          existing.current_stock = availableStock;
+          existing.selling_price = Number(product.selling_price);
+        }
+
+        addToCart(catalogItem.id);
+      } catch (err) {
+        Toast.error(err.message || 'No active product with available stock matches that SKU or barcode.');
+      }
+    }
+
     // Barcode Fast Scan Input Event
     barcodeInput.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         const code = barcodeInput.value.trim();
         if (!code) return;
-        if (!warehouseSelect.value) {
-          Toast.error('Select an active warehouse before scanning products.');
-          return;
-        }
-
         barcodeInput.value = '';
-        try {
-          const res = await API.get('/products', {
-            limit: 100,
-            warehouse_id: warehouseSelect.value,
-            status: 'active',
-            search: code
-          });
-          const product = (res.data.products || []).find(item => item.barcode === code || item.sku === code);
-          if (product) {
-            if (!catalog.some(item => Number(item.id) === Number(product.id))) catalog.push(product);
-            addToCart(product.id);
-          } else {
-            Toast.error('No active product with available stock matches that SKU or barcode.');
-          }
-        } catch (err) {
-          Toast.error(`Barcode scan failed: ${err.message}`);
-        }
+        await handleBarcodeScan(code);
       }
     });
 

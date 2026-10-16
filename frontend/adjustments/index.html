@@ -130,7 +130,9 @@
 
         document.getElementById('adj-wh').innerHTML = cachedWarehouses.map(w => `<option value="${UI.escape(w.id)}">${UI.escape(w.name)}</option>`).join('');
         document.getElementById('adj-prod').innerHTML = cachedProducts.map(p => `<option value="${UI.escape(p.id)}">${UI.escape(p.name)} (${UI.escape(p.sku)})</option>`).join('');
-      } catch (e) {}
+      } catch (err) {
+        Toast.error(`Failed to load adjustment options: ${err.message}`);
+      }
     }
 
     async function onWhOrProductChange() {
@@ -145,7 +147,12 @@
         currentAvailable = ws ? ws.quantity : 0;
         document.getElementById('current-wh-stock-display').innerText = `${currentAvailable} ${p.unit}`;
         previewNewQuantity();
-      } catch (e) {}
+      } catch (err) {
+        currentAvailable = 0;
+        document.getElementById('current-wh-stock-display').innerText = 'Stock unavailable';
+        document.getElementById('projected-qty-display').innerText = 'Stock unavailable';
+        Toast.error(`Failed to load product stock: ${err.message}`);
+      }
     }
 
     function previewNewQuantity() {

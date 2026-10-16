@@ -21,12 +21,34 @@ function parseQuantity(value) {
   return Number.isSafeInteger(quantity) && quantity <= 2147483647 ? quantity : null;
 }
 
+function isValidDateString(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 /**
  * GET /api/sales
  */
 async function getAllSales(req, res, next) {
   try {
     const { search, customer_id, warehouse_id, payment_status, payment_method, start_date, end_date } = req.query;
+    if (search !== undefined && typeof search !== 'string') {
+      return error(res, 'Search must be a single text value', 400);
+    }
+    if (payment_status && !['Paid', 'Partially Paid', 'Unpaid'].includes(payment_status)) {
+      return error(res, 'Invalid payment status filter', 400);
+    }
+    if (payment_method && !['Cash', 'Bank', 'Mobile Money', 'Credit', 'Other'].includes(payment_method)) {
+      return error(res, 'Invalid payment method filter', 400);
+    }
+    if ((start_date && !isValidDateString(start_date)) || (end_date && !isValidDateString(end_date))) {
+      return error(res, 'Date filters must use a valid YYYY-MM-DD date', 400);
+    }
+    if (start_date && end_date && start_date > end_date) {
+      return error(res, 'Start date must be on or before end date', 400);
+    }
+
     const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
     const where = [];
@@ -38,12 +60,12 @@ async function getAllSales(req, res, next) {
 
     if (customer_id) {
       where.push('s.customer_id = ?');
-      params.push(customer_id);
+      params.push(validateId(customer_id, 'customer_id'));
     }
 
     if (warehouse_id) {
       where.push('s.warehouse_id = ?');
-      params.push(warehouse_id);
+      params.push(validateId(warehouse_id, 'warehouse_id'));
     }
 
     if (payment_status) {
@@ -197,12 +219,7 @@ async function createSale(req, res, next) {
       await conn.rollback();
       return error(res, 'At least one item is required in the sale cart', 400);
     }
-    const parsedSaleDate = typeof sale_date === 'string'
-      ? new Date(`${sale_date}T00:00:00.000Z`)
-      : null;
-    if (!parsedSaleDate || Number.isNaN(parsedSaleDate.getTime()) ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(sale_date) ||
-        parsedSaleDate.toISOString().slice(0, 10) !== sale_date) {
+    if (!isValidDateString(sale_date)) {
       await conn.rollback();
       return error(res, 'Sale date must be a valid date in YYYY-MM-DD format', 400);
     }
@@ -234,14 +251,18 @@ async function createSale(req, res, next) {
       );
       await conn.rollback();
       const existing = existingRows[0];
-      if (!existing || existing.request_hash !== requestHash || !existing.sale_id) {
+      if (!existing || existing.request_hash !== requestHash) {
         return error(res, 'This sale submission key was already used for a different request', 409);
       }
-      const [saleRows] = await query('SELECT * FROM sales WHERE id = ?', [existing.sale_id]);
-      const [saleItems] = await query('SELECT * FROM sale_items WHERE sale_id = ?', [existing.sale_id]);
+
+      if (!existing.sale_id) {
+        return error(res, 'This submission key has no completed sale linked to it', 409);
+      }
+      const saleRows = await query('SELECT * FROM sales WHERE id = ?', [existing.sale_id]);
       if (!saleRows.length) {
         return error(res, 'The original sale for this submission key no longer exists', 409);
       }
+      const saleItems = await query('SELECT * FROM sale_items WHERE sale_id = ?', [existing.sale_id]);
       return success(res, {
         ...saleRows[0],
         items: saleItems,

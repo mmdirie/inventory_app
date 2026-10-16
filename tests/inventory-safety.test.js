@@ -64,14 +64,36 @@ test('HTML escaping renders script-like input as inert text', () => {
   assert.equal(context.pwned, undefined);
 });
 
+test('API client reports HTTP status when an error response is not JSON', async () => {
+  const source = fs.readFileSync(path.join(projectRoot, 'public', 'js', 'api.js'), 'utf8');
+  const api = vm.runInNewContext(`${source}\nAPI`, {
+    localStorage: { getItem: () => null },
+    URLSearchParams,
+    fetch: async () => ({
+      status: 502,
+      ok: false,
+      json: async () => { throw new SyntaxError('Unexpected token <'); }
+    }),
+    window: { location: { pathname: '/dashboard.html' } },
+    console: { error: () => {} }
+  });
+
+  await assert.rejects(api.get('/health'), /Request failed with status 502/);
+});
+
 test('Sales History provides an authenticated Create Sale entry point', () => {
   const history = fs.readFileSync(path.join(projectRoot, 'frontend', 'sales', 'list.html'), 'utf8');
   const register = fs.readFileSync(path.join(projectRoot, 'frontend', 'sales', 'index.html'), 'utf8');
 
   assert.match(history, /id="create-sale-link"[^>]*href="\/sales\/index\.html"/);
+  assert.match(history, /id="start-date-filter"/);
+  assert.match(history, /id="end-date-filter"/);
+  assert.match(history, /let salesRequestId = 0/);
   assert.match(history, /fa-cash-register mr-2[^<]*<\/i>\s*Create Sale/);
   assert.match(register, /async function submitSaleTransaction\(\)/);
   assert.match(register, /API\.post\('\/sales', payload, \{ 'Idempotency-Key': pendingSaleKey \}\)/);
+  assert.match(register, /API\.get\(`\/barcode\/lookup\/\$\{encodeURIComponent\(code\)\}`\)/);
+  assert.doesNotMatch(register, /\.catch\(\(\) => null\)/);
 });
 
 test('strict numeric parsing rejects malformed trade values before they reach the database', () => {
@@ -407,6 +429,25 @@ test('isolated database migrations preserve data and transactional workflows rem
         body: JSON.stringify(makeSale(customerId, warehouseId, saleProductId, 1, 10, 10))
       });
       assert.equal(unauthorizedSale.status, 401);
+      const permissionConnection = await databaseConnection(appDb);
+      let limitedUserId;
+      try {
+        const [limitedUserInsert] = await permissionConnection.execute(
+          "INSERT INTO users (name, email, password_hash, role, status) VALUES ('Limited User', 'limited-user@example.invalid', 'unused', 'Sales', 'active')"
+        );
+        limitedUserId = limitedUserInsert.insertId;
+        await permissionConnection.execute(
+          "DELETE FROM role_permissions WHERE role = 'Sales' AND permission = 'dashboard.view'"
+        );
+      } finally {
+        await permissionConnection.end();
+      }
+      const limitedToken = jwt.sign({ id: limitedUserId }, process.env.JWT_SECRET, { expiresIn: '5m' });
+      const forbiddenDashboard = await fetch(`http://127.0.0.1:${port}/api/dashboard/stats`, {
+        headers: { Authorization: `Bearer ${limitedToken}` }
+      });
+      assert.equal(forbiddenDashboard.status, 403, 'dashboard access requires the dashboard.view permission');
+
       const saleWithoutKey = await fetch(`http://127.0.0.1:${port}/api/sales`, {
         method: 'POST',
         headers: {
@@ -435,6 +476,20 @@ test('isolated database migrations preserve data and transactional workflows rem
       });
       assert.equal(saleResponse.status, 201, saleResponse.body.message);
       const saleId = saleResponse.body.data.id;
+      const dateFilteredSales = await request(
+        'GET',
+        `/sales?start_date=${salePayload.sale_date}&end_date=${salePayload.sale_date}`
+      );
+      assert.equal(dateFilteredSales.status, 200);
+      assert.ok(dateFilteredSales.body.data.sales.some(sale => sale.id === saleId));
+      const invalidDateFilter = await request('GET', '/sales?start_date=2026-02-30');
+      assert.equal(invalidDateFilter.status, 400);
+      const reversedDateFilter = await request(
+        'GET',
+        `/sales?start_date=${salePayload.sale_date}&end_date=2000-01-01`
+      );
+      assert.equal(reversedDateFilter.status, 400);
+
       const repeatedSale = await request('POST', '/sales', salePayload, {
         'Idempotency-Key': saleIdempotencyKey
       });
@@ -445,6 +500,20 @@ test('isolated database migrations preserve data and transactional workflows rem
         notes: 'Different request'
       }, { 'Idempotency-Key': saleIdempotencyKey });
       assert.equal(reusedKey.status, 409);
+
+      const idempotencyConnection = await databaseConnection(appDb);
+      try {
+        await idempotencyConnection.execute(
+          'UPDATE sale_idempotency SET sale_id = NULL WHERE idempotency_key = ?',
+          [saleIdempotencyKey]
+        );
+      } finally {
+        await idempotencyConnection.end();
+      }
+      const unlinkedRetry = await request('POST', '/sales', salePayload, {
+        'Idempotency-Key': saleIdempotencyKey
+      });
+      assert.equal(unlinkedRetry.status, 409, 'an unlinked key must not resolve to an unrelated recent sale');
 
       const stockConnection = await databaseConnection(appDb);
       try {

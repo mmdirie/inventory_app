@@ -68,6 +68,10 @@ async function generateSuggestedBarcode(req, res, next) {
       }
     }
 
+    if (exists) {
+      return error(res, 'Could not generate a unique barcode candidate. Try again.', 503);
+    }
+
     return success(res, { barcode }, 'Generated unique barcode candidate');
   } catch (err) {
     next(err);

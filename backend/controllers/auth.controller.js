@@ -99,14 +99,7 @@ async function logout(req, res, next) {
 
     if (token) {
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      let expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-      try {
-        const decoded = jwt.decode(token);
-        if (decoded && decoded.exp) {
-          expiresAt = new Date(decoded.exp * 1000);
-        }
-      } catch (e) {}
+      const expiresAt = req.tokenExp;
 
       try {
         await query(

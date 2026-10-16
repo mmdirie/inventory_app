@@ -475,6 +475,7 @@
       wrapper.classList.remove('hidden');
 
       let labelIdx = 0;
+      let failedLabels = 0;
       checkedBoxes.forEach(chk => {
         const prodId = chk.dataset.id;
         const prod = cachedProducts.find(p => p.id == prodId);
@@ -499,22 +500,27 @@
           `;
           sheet.appendChild(labelDiv);
 
-          setTimeout(() => {
-            try {
-              JsBarcode(`#${svgId}`, prod.barcode || prod.sku, {
-                format: "CODE128",
-                width: 1.4,
-                height: 34,
-                displayValue: true,
-                fontSize: 10,
-                margin: 0
-              });
-            } catch (err) {}
-          }, 0);
+          try {
+            JsBarcode(`#${svgId}`, prod.barcode || prod.sku, {
+              format: "CODE128",
+              width: 1.4,
+              height: 34,
+              displayValue: true,
+              fontSize: 10,
+              margin: 0
+            });
+          } catch (err) {
+            failedLabels++;
+            console.error(`Failed to render barcode label for product ${prodId}:`, err);
+          }
         }
       });
 
-      Toast.success(`Generated ${labelIdx} printable barcode sticker labels!`);
+      if (failedLabels > 0) {
+        Toast.error(`Generated ${labelIdx - failedLabels} of ${labelIdx} barcode labels. Check the console for failed product details.`);
+      } else {
+        Toast.success(`Generated ${labelIdx} printable barcode sticker labels!`);
+      }
       wrapper.scrollIntoView({ behavior: 'smooth' });
     }
 
