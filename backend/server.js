@@ -3,6 +3,15 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// Validate critical environment variables
+const requiredEnv = ['JWT_SECRET'];
+for (const envVar of requiredEnv) {
+  if (!process.env[envVar] || !process.env[envVar].trim()) {
+    console.error(`[FATAL] Missing required environment variable: ${envVar}`);
+    process.exit(1);
+  }
+}
+
 const { errorHandler } = require('./middleware/error.middleware');
 
 // Routes
@@ -32,13 +41,40 @@ const barcodeRoutes = require('./routes/barcode.routes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Security: Disable X-Powered-By
+app.disable('x-powered-by');
+
+// Security Headers Middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// CORS Configuration - Avoid combining wildcard origin with credentials: true
+const rawOrigin = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.trim() : '*';
+const isWildcard = rawOrigin === '*';
+
+if (isWildcard) {
+  app.use(cors({
+    origin: '*',
+    credentials: false
+  }));
+} else {
+  const allowedOrigins = rawOrigin.includes(',')
+    ? rawOrigin.split(',').map(o => o.trim())
+    : rawOrigin;
+  app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+  }));
+}
+
+// Body Parsing with payload size limits
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Serve static frontend assets
 app.use(express.static(path.join(__dirname, '..', 'public')));

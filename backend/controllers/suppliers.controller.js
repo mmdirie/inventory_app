@@ -1,7 +1,7 @@
 const { query } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const { validateRequired, validateId } = require('../validators/input.validator');
 
 async function getAllSuppliers(req, res, next) {
   try {
@@ -41,7 +41,10 @@ async function getAllSuppliers(req, res, next) {
 
 async function getSupplierById(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid supplier ID is required', 400);
+    }
     const rows = await query('SELECT * FROM suppliers WHERE id = ?', [id]);
     if (!rows || rows.length === 0) {
       return error(res, 'Supplier not found', 404);
@@ -125,7 +128,10 @@ async function createSupplier(req, res, next) {
 
 async function updateSupplier(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid supplier ID is required', 400);
+    }
     const { name, company, phone, email, address, city, country, tax_number, notes, status } = req.body;
 
     const existing = await query('SELECT * FROM suppliers WHERE id = ?', [id]);
@@ -178,7 +184,10 @@ async function updateSupplier(req, res, next) {
 
 async function deleteSupplier(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid supplier ID is required', 400);
+    }
     const [pRef] = await query('SELECT COUNT(*) as count FROM purchases WHERE supplier_id = ?', [id]);
     if (pRef.count > 0) {
       await query('UPDATE suppliers SET status = "inactive" WHERE id = ?', [id]);

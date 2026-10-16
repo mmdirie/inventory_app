@@ -1,7 +1,7 @@
 const { query } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const { validateRequired, validateId, parseStrictNumber } = require('../validators/input.validator');
 
 async function getAllCustomers(req, res, next) {
   try {
@@ -46,7 +46,10 @@ async function getAllCustomers(req, res, next) {
 
 async function getCustomerById(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid customer ID is required', 400);
+    }
     const rows = await query('SELECT * FROM customers WHERE id = ?', [id]);
     if (!rows || rows.length === 0) {
       return error(res, 'Customer not found', 404);
@@ -107,6 +110,11 @@ async function createCustomer(req, res, next) {
       return error(res, 'Customer name is required', 400);
     }
 
+    const creditVal = parseStrictNumber(credit_limit, 0);
+    if (credit_limit !== undefined && creditVal === null) {
+      return error(res, 'Credit limit must be a valid non-negative number', 400);
+    }
+
     const result = await query(`
       INSERT INTO customers (name, phone, email, address, city, customer_type, credit_limit, balance, notes, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, 0.00, ?, ?)
@@ -117,7 +125,7 @@ async function createCustomer(req, res, next) {
       address || null,
       city || null,
       customer_type,
-      parseFloat(credit_limit) || 0,
+      creditVal !== null ? creditVal : 0,
       notes || null,
       status
     ]);
@@ -140,8 +148,19 @@ async function createCustomer(req, res, next) {
 
 async function updateCustomer(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid customer ID is required', 400);
+    }
     const { name, phone, email, address, city, customer_type, credit_limit, notes, status } = req.body;
+
+    let creditVal = null;
+    if (credit_limit !== undefined) {
+      creditVal = parseStrictNumber(credit_limit, 0);
+      if (creditVal === null) {
+        return error(res, 'Credit limit must be a valid non-negative number', 400);
+      }
+    }
 
     const existing = await query('SELECT * FROM customers WHERE id = ?', [id]);
     if (!existing || existing.length === 0) {
@@ -167,7 +186,7 @@ async function updateCustomer(req, res, next) {
       address !== undefined ? address : existing[0].address,
       city !== undefined ? city : existing[0].city,
       customer_type || null,
-      credit_limit !== undefined ? parseFloat(credit_limit) : null,
+      creditVal !== null ? creditVal : null,
       notes !== undefined ? notes : existing[0].notes,
       status || null,
       id
@@ -191,7 +210,10 @@ async function updateCustomer(req, res, next) {
 
 async function deleteCustomer(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid customer ID is required', 400);
+    }
     const [sRef] = await query('SELECT COUNT(*) as count FROM sales WHERE customer_id = ?', [id]);
     if (sRef.count > 0) {
       await query('UPDATE customers SET status = "inactive" WHERE id = ?', [id]);

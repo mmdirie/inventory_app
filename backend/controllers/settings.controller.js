@@ -1,6 +1,7 @@
 const { query } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
+const { parseStrictDecimal, parseStrictPositiveInteger } = require('../validators/input.validator');
 
 /**
  * GET /api/settings
@@ -40,6 +41,13 @@ async function updateSettings(req, res, next) {
       receipt_footer
     } = req.body;
 
+    const parsedTaxRate = tax_rate === undefined ? null : parseStrictDecimal(tax_rate, { min: 0, max: 1000 });
+    const parsedLowStock = low_stock_threshold === undefined ? null : parseStrictPositiveInteger(low_stock_threshold);
+
+    if ((tax_rate !== undefined && parsedTaxRate === null) || (low_stock_threshold !== undefined && parsedLowStock === null)) {
+      return error(res, 'Tax rate and low stock threshold must be valid numeric values.', 400);
+    }
+
     const existing = await query('SELECT id FROM settings LIMIT 1');
     if (existing.length === 0) {
       await query(`
@@ -49,20 +57,20 @@ async function updateSettings(req, res, next) {
           invoice_number_format, date_format, timezone, low_stock_threshold, receipt_footer
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        business_name || 'Apex Commercial Supplies Ltd',
+        business_name || 'My Business',
         business_logo || '',
         phone || null,
         email || null,
         address || null,
         currency || '$',
         currency_symbol_position || 'before',
-        parseFloat(tax_rate) || 0,
+        parsedTaxRate ?? 0,
         invoice_prefix || 'INV-',
         purchase_prefix || 'PO-',
         invoice_number_format || 'PREFIX-YEAR-SEQ',
         date_format || 'YYYY-MM-DD',
         timezone || 'UTC',
-        parseInt(low_stock_threshold, 10) || 10,
+        parsedLowStock ?? 10,
         receipt_footer || ''
       ]);
     } else {
@@ -92,13 +100,13 @@ async function updateSettings(req, res, next) {
         address || null,
         currency || null,
         currency_symbol_position || null,
-        tax_rate !== undefined ? parseFloat(tax_rate) : null,
+        parsedTaxRate,
         invoice_prefix || null,
         purchase_prefix || null,
         invoice_number_format || null,
         date_format || null,
         timezone || null,
-        low_stock_threshold !== undefined ? parseInt(low_stock_threshold, 10) : null,
+        parsedLowStock,
         receipt_footer || null,
         existing[0].id
       ]);

@@ -49,7 +49,7 @@ Authorization: Bearer <jwt_token>
 
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
-| `GET` | `/api/products` | `products.view` | Query products with pagination, search, category, brand, and low-stock filter |
+| `GET` | `/api/products` | `products.view` | Query products with pagination, search, category, brand, warehouse, and low-stock filter; warehouse-filtered results include `warehouse_quantity` |
 | `GET` | `/api/products/:id` | `products.view` | Get product details including warehouse stock breakdown |
 | `POST` | `/api/products` | `products.create` | Create new product (validates unique SKU and barcode) |
 | `PUT` | `/api/products/:id` | `products.edit` | Update product information |
@@ -112,7 +112,9 @@ Authorization: Bearer <jwt_token>
 |---|---|---|---|
 | `GET` | `/api/sales` | `sales.view` | Sales order history and receipts |
 | `GET` | `/api/sales/:id` | `sales.view` | Sale receipt breakdown with customer and cashier details |
-| `POST` | `/api/sales` | `sales.create` | Process checkout: locks stock rows, deducts inventory, generates invoice |
+| `POST` | `/api/sales` | `sales.create` | Process checkout atomically: locks stock rows, validates database prices and configured tax, deducts inventory, and creates payment/invoice records |
+
+Sale creation requires an `Idempotency-Key` header containing 8–128 safe characters. Repeating the same key and request returns the original sale; reusing a key with a different request returns `409 Conflict`. The POS register generates and reuses this key automatically when retrying a submission.
 
 ---
 

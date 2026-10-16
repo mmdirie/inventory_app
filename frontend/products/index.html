@@ -61,8 +61,8 @@
         <!-- Low Stock Filter Toggle -->
         <div>
           <select id="status-filter" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="active" selected>Active Only</option>
             <option value="">All Statuses</option>
-            <option value="active">Active Only</option>
             <option value="inactive">Inactive</option>
             <option value="low_stock">Low Stock Only</option>
           </select>
@@ -122,7 +122,7 @@
           <!-- SKU -->
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">SKU <span class="text-rose-500">*</span></label>
-            <input type="text" id="prod-sku" required placeholder="SKU-XXX-001" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            <input type="text" id="prod-sku" required placeholder="Enter product SKU" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
           </div>
 
           <!-- Barcode with Generate Button -->
@@ -131,14 +131,14 @@
               <label class="text-xs font-bold text-slate-700">Barcode <span class="text-rose-500">*</span></label>
               <button type="button" onclick="generateBarcodeCandidate()" class="text-[11px] text-blue-600 hover:underline">Auto Generate</button>
             </div>
-            <input type="text" id="prod-barcode" required placeholder="890123450000" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            <input type="text" id="prod-barcode" required placeholder="Enter barcode" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
           </div>
         </div>
 
         <!-- Name -->
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Product Name <span class="text-rose-500">*</span></label>
-          <input type="text" id="prod-name" required placeholder="Dell Latitude 5540 15.6 Inch Laptop" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          <input type="text" id="prod-name" required placeholder="Enter product name" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" />
         </div>
 
         <!-- Description -->
@@ -267,7 +267,7 @@
         const [cats, brands, sups, whs] = await Promise.all([
           API.get('/categories'),
           API.get('/brands'),
-          API.get('/suppliers'),
+          API.get('/suppliers', { status: 'active' }),
           API.get('/warehouses')
         ]);
 
@@ -324,7 +324,19 @@
 
         const tbody = document.getElementById('products-tbody');
         if (products.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" class="px-5 py-8 text-center text-slate-400">No products match your search criteria.</td></tr>';
+          const hasSearchFilters = Boolean(params.search || params.category_id || params.warehouse_id || statusVal === 'inactive' || statusVal === 'low_stock');
+          tbody.innerHTML = hasSearchFilters
+            ? '<tr><td colspan="8" class="px-5 py-8 text-center text-slate-400">No products match your search criteria.</td></tr>'
+            : `<tr><td colspan="8" class="px-5 py-12 text-center">
+                <i class="fa-solid fa-box-open text-3xl text-slate-300 mb-3"></i>
+                <p class="text-sm font-semibold text-slate-700">No products found. Add your first product.</p>
+                <button type="button" id="empty-add-product-btn" class="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl">
+                  <i class="fa-solid fa-plus mr-2"></i>Add Product
+                </button>
+              </td></tr>`;
+          document.getElementById('empty-add-product-btn')?.addEventListener('click', () => {
+            document.getElementById('add-product-btn').click();
+          });
         } else {
           tbody.innerHTML = products.map(p => {
             const isLow = p.current_stock <= p.min_stock_level;

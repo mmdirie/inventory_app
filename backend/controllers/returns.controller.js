@@ -1,7 +1,7 @@
 const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const { validateRequired, validateId, parsePagination } = require('../validators/input.validator');
 const { nextDocumentNumber } = require('../utils/document-number');
 
 function parseAmount(value) {
@@ -25,8 +25,8 @@ function parseQuantity(value) {
  */
 async function getAllReturns(req, res, next) {
   try {
-    const { return_type, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { return_type } = req.query;
+    const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
     const where = [];
 
@@ -58,15 +58,15 @@ async function getAllReturns(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const returns = await query(dataSql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    const returns = await query(dataSql, [...params, limit, offset]);
 
     return success(res, {
       returns,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Returns fetched');
   } catch (err) {
@@ -79,7 +79,10 @@ async function getAllReturns(req, res, next) {
  */
 async function getReturnById(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid return ID is required', 400);
+    }
     const rows = await query(`
       SELECT 
         r.*,

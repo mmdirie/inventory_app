@@ -9,7 +9,7 @@ Designed specifically for **one organization** — no SaaS, no multi-tenant isol
 ## 🚀 Key Modules & Capabilities
 
 - 📊 **Executive Dashboard:** Live KPIs, 7-day revenue trend chart (Chart.js), critical low-stock alerts, and recent transactions.
-- 🛒 **Point-of-Sale (POS) Terminal:** Fast barcode scanning, real-time cart calculations, split/partial payments, customer selection, credit limits, and printable thermal receipts.
+- 🛒 **Point-of-Sale (POS) Terminal:** Create Sale from Sales History, search and scan products, build multi-item carts, collect partial payments, enforce database prices/tax and stock, and print receipts.
 - 📦 **Product Catalog:** SKU & barcode uniqueness validation, categories, brands, pricing tiers (retail vs wholesale), reorder limits, and stock distribution.
 - 🏢 **Multi-Warehouse Support:** Support for multiple warehouses/stores inside the same business with per-warehouse stock counts.
 - 🔄 **Stock Transfers & Adjustments:** Inter-warehouse transfer approval workflow (`Pending` -> `Approved` -> `Completed`) and cycle-count stock adjustments.
@@ -54,15 +54,24 @@ DB_USER=root
 DB_PASSWORD=
 DB_NAME=inventory_management
 
-JWT_SECRET=8f511fdde3cc6b205960fdc6089779ca68570eb46ef7e86b78ca5621bf5121a3
+# Generate a unique secret with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+JWT_SECRET=replace-with-a-unique-random-secret
 JWT_EXPIRES_IN=7d
 CORS_ORIGIN=*
+
+BUSINESS_NAME=
+SEED_ADMIN_NAME=
+SEED_ADMIN_EMAIL=
+SEED_ADMIN_PASSWORD=
 ```
 
-### 3. Database Migration & Seed
+### 3. Database Setup & First Administrator
 ```bash
 npm run setup
+npm run seed
 ```
+
+`npm run setup` creates the schema only. The guarded bootstrap requires your administrator name, email, and a unique password of at least 12 characters, and initializes roles, permissions, and default settings. It does not add demo customers, suppliers, products, warehouses, inventory, or transactions.
 
 ### 4. Start Server
 ```bash
@@ -73,15 +82,7 @@ Navigate to `http://localhost:5000` in your browser.
 
 ---
 
-## 🔑 Demo Login Accounts
-
-| Role | Email | Password |
-|---|---|---|
-| **Admin** | `admin@apexinventory.com` | `Admin@123` |
-| **Manager** | `manager@apexinventory.com` | `Manager@123` |
-| **Sales** | `sales@apexinventory.com` | `Sales@123` |
-| **Inventory** | `inventory@apexinventory.com` | `Inventory@123` |
-| **Accountant** | `accountant@apexinventory.com` | `Accountant@123` |
+Sign in with the administrator credentials configured in `.env`. Add your business's products, customers, suppliers, and other records after signing in.
 
 ---
 

@@ -1,5 +1,6 @@
 const { query } = require('../config/db');
 const { success, error } = require('../utils/response');
+const { parsePagination } = require('../validators/input.validator');
 
 /**
  * GET /api/stock
@@ -7,8 +8,8 @@ const { success, error } = require('../utils/response');
  */
 async function getStockOverview(req, res, next) {
   try {
-    const { search, category_id, warehouse_id, low_stock, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { search, category_id, warehouse_id, low_stock } = req.query;
+    const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
     const where = ['p.status = "active"'];
 
@@ -67,7 +68,7 @@ async function getStockOverview(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const products = await query(stockSql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    const products = await query(stockSql, [...params, limit, offset]);
 
     // Fetch warehouse distribution for these products
     if (products.length > 0) {
@@ -110,9 +111,9 @@ async function getStockOverview(req, res, next) {
       products,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Stock overview fetched');
   } catch (err) {
@@ -131,12 +132,10 @@ async function getStockMovements(req, res, next) {
       warehouse_id,
       movement_type,
       start_date,
-      end_date,
-      page = 1,
-      limit = 25
+      end_date
     } = req.query;
 
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { page, limit, offset } = parsePagination(req.query, 25, 100);
     const params = [];
     const where = [];
 
@@ -191,15 +190,15 @@ async function getStockMovements(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const movements = await query(dataSql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    const movements = await query(dataSql, [...params, limit, offset]);
 
     return success(res, {
       movements,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Stock movements fetched');
   } catch (err) {

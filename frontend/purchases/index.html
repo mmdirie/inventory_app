@@ -227,7 +227,7 @@
     async function initOptions() {
       try {
         const [supRes, whRes, prodRes] = await Promise.all([
-          API.get('/suppliers'),
+          API.get('/suppliers', { status: 'active' }),
           API.get('/warehouses'),
           API.get('/products', { limit: 100 })
         ]);

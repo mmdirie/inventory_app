@@ -1,7 +1,13 @@
 const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired, isPositiveNumber } = require('../validators/input.validator');
+const {
+  validateRequired,
+  parseStrictNumber,
+  parseStrictInteger,
+  validateId,
+  parsePagination
+} = require('../validators/input.validator');
 
 /**
  * GET /api/products
@@ -17,32 +23,42 @@ async function getAllProducts(req, res, next) {
       status,
       low_stock,
       sort_by = 'p.id',
-      sort_dir = 'DESC',
-      page = 1,
-      limit = 20
+      sort_dir = 'DESC'
     } = req.query;
 
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
+    const joinParams = [];
     const whereConditions = [];
 
-    if (search && search.trim() !== '') {
+    if (search && typeof search === 'string' && search.trim() !== '') {
       whereConditions.push('(p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ? OR p.description LIKE ?)');
       const term = `%${search.trim()}%`;
       params.push(term, term, term, term);
     }
 
     if (category_id) {
+      const catId = parseStrictInteger(category_id);
+      if (catId === null) {
+        return error(res, 'Invalid category_id parameter', 400);
+      }
       whereConditions.push('p.category_id = ?');
-      params.push(category_id);
+      params.push(catId);
     }
 
     if (brand_id) {
+      const bId = parseStrictInteger(brand_id);
+      if (bId === null) {
+        return error(res, 'Invalid brand_id parameter', 400);
+      }
       whereConditions.push('p.brand_id = ?');
-      params.push(brand_id);
+      params.push(bId);
     }
 
     if (status) {
+      if (status !== 'active' && status !== 'inactive') {
+        return error(res, 'Invalid status parameter. Must be "active" or "inactive"', 400);
+      }
       whereConditions.push('p.status = ?');
       params.push(status);
     }
@@ -53,8 +69,12 @@ async function getAllProducts(req, res, next) {
 
     let joinWarehouse = '';
     if (warehouse_id) {
+      const whId = parseStrictInteger(warehouse_id);
+      if (whId === null) {
+        return error(res, 'Invalid warehouse_id parameter', 400);
+      }
       joinWarehouse = 'JOIN warehouse_stock ws ON p.id = ws.product_id AND ws.warehouse_id = ?';
-      params.push(warehouse_id);
+      joinParams.push(whId);
     }
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -66,8 +86,8 @@ async function getAllProducts(req, res, next) {
       ${joinWarehouse}
       ${whereClause}
     `;
-    const [countRow] = await query(countSql, params);
-    const total = countRow.total;
+    const [countRow] = await query(countSql, [...joinParams, ...params]);
+    const total = countRow ? countRow.total : 0;
 
     // Allowed sort columns
     const allowedSort = ['p.id', 'p.name', 'p.sku', 'p.barcode', 'p.current_stock', 'p.selling_price', 'p.purchase_price', 'p.created_at'];
@@ -77,6 +97,7 @@ async function getAllProducts(req, res, next) {
     const dataSql = `
       SELECT 
         p.*,
+        ${warehouse_id ? 'ws.quantity as warehouse_quantity,' : ''}
         c.name as category_name,
         b.name as brand_name,
         s.name as supplier_name,
@@ -93,16 +114,15 @@ async function getAllProducts(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const dataParams = [...params, parseInt(limit, 10), parseInt(offset, 10)];
-    const products = await query(dataSql, dataParams);
+    const products = await query(dataSql, [...joinParams, ...params, limit, offset]);
 
     return success(res, {
       products,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit) || 1
       }
     }, 'Products fetched successfully');
   } catch (err) {
@@ -115,14 +135,16 @@ async function getAllProducts(req, res, next) {
  */
 async function getProductById(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id, 'product ID');
+
     const rows = await query(`
       SELECT 
         p.*,
         c.name as category_name,
         b.name as brand_name,
         s.name as supplier_name,
-        w.name as default_warehouse_name
+        w.name as default_warehouse_name,
+        (p.current_stock <= p.min_stock_level) as is_low_stock
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN brands b ON p.brand_id = b.id
@@ -137,16 +159,17 @@ async function getProductById(req, res, next) {
 
     const product = rows[0];
 
-    // Get stock by warehouses
+    // Fetch warehouse-specific stock levels
     const warehouseStock = await query(`
       SELECT ws.warehouse_id, ws.quantity, w.name as warehouse_name, w.location
       FROM warehouse_stock ws
       JOIN warehouses w ON ws.warehouse_id = w.id
       WHERE ws.product_id = ?
+      ORDER BY ws.warehouse_id ASC
     `, [id]);
     product.warehouse_stock = warehouseStock;
 
-    // Get recent movements
+    // Fetch recent stock movements
     const movements = await query(`
       SELECT sm.*, w.name as warehouse_name, u.name as user_name
       FROM stock_movements sm
@@ -170,6 +193,10 @@ async function getProductById(req, res, next) {
 async function getProductByBarcode(req, res, next) {
   try {
     const { barcode } = req.params;
+    if (!barcode || typeof barcode !== 'string') {
+      return error(res, 'Barcode parameter is required', 400);
+    }
+
     const rows = await query(`
       SELECT 
         p.*,
@@ -183,7 +210,7 @@ async function getProductByBarcode(req, res, next) {
       LEFT JOIN suppliers s ON p.supplier_id = s.id
       LEFT JOIN warehouses w ON p.default_warehouse_id = w.id
       WHERE p.barcode = ? AND p.status = 'active'
-    `, [barcode]);
+    `, [barcode.trim()]);
 
     if (!rows || rows.length === 0) {
       return error(res, 'No active product found matching this barcode', 404);
@@ -234,6 +261,34 @@ async function createProduct(req, res, next) {
       return error(res, `Missing required fields: ${missing.join(', ')}`, 400);
     }
 
+    // Validate numeric prices and stock strictly
+    const pPrice = parseStrictNumber(purchase_price);
+    const sPrice = parseStrictNumber(selling_price);
+    const wPrice = parseStrictNumber(wholesale_price !== undefined ? wholesale_price : 0);
+    const minStock = parseStrictInteger(min_stock_level !== undefined ? min_stock_level : 5);
+    const initStock = parseStrictInteger(initial_stock !== undefined ? initial_stock : 0);
+
+    if (pPrice === null || pPrice < 0 || pPrice > 9999999999.99) {
+      await conn.rollback();
+      return error(res, 'Purchase price must be a non-negative number', 400);
+    }
+    if (sPrice === null || sPrice < 0 || sPrice > 9999999999.99) {
+      await conn.rollback();
+      return error(res, 'Selling price must be a non-negative number', 400);
+    }
+    if (wPrice === null || wPrice < 0 || wPrice > 9999999999.99) {
+      await conn.rollback();
+      return error(res, 'Wholesale price must be a non-negative number', 400);
+    }
+    if (minStock === null || minStock < 0 || minStock > 2147483647) {
+      await conn.rollback();
+      return error(res, 'Minimum stock level must be a non-negative integer', 400);
+    }
+    if (initStock === null || initStock < 0 || initStock > 2147483647) {
+      await conn.rollback();
+      return error(res, 'Initial stock must be a non-negative integer', 400);
+    }
+
     // Check duplicate SKU or Barcode
     const [existingSku] = await conn.execute('SELECT id FROM products WHERE sku = ?', [sku.trim()]);
     if (existingSku.length > 0) {
@@ -247,14 +302,31 @@ async function createProduct(req, res, next) {
       return error(res, `Product with Barcode '${barcode}' already exists`, 409);
     }
 
-    // Validate warehouse if initial_stock > 0
-    let targetWhId = default_warehouse_id;
-    if (!targetWhId) {
-      const [defaultWh] = await conn.execute('SELECT id FROM warehouses WHERE is_default = 1 LIMIT 1');
-      targetWhId = defaultWh.length > 0 ? defaultWh[0].id : 1;
+    let targetWhId = null;
+    if (default_warehouse_id !== undefined && default_warehouse_id !== null && String(default_warehouse_id).trim() !== '') {
+      targetWhId = parseStrictInteger(default_warehouse_id);
+      if (targetWhId === null || targetWhId <= 0) {
+        await conn.rollback();
+        return error(res, 'Invalid default warehouse ID', 400);
+      }
+      const [warehouseRows] = await conn.execute(
+        "SELECT id FROM warehouses WHERE id = ? AND status = 'active'",
+        [targetWhId]
+      );
+      if (warehouseRows.length === 0) {
+        await conn.rollback();
+        return error(res, 'Selected warehouse not found or inactive', 400);
+      }
+    } else {
+      const [defaultWh] = await conn.execute(
+        "SELECT id FROM warehouses WHERE is_default = 1 AND status = 'active' LIMIT 1"
+      );
+      targetWhId = defaultWh.length > 0 ? Number(defaultWh[0].id) : null;
     }
-
-    const currentStock = Math.max(0, parseInt(initial_stock, 10) || 0);
+    if (initStock > 0 && !targetWhId) {
+      await conn.rollback();
+      return error(res, 'Create an active warehouse before recording initial stock', 400);
+    }
 
     const [insertResult] = await conn.execute(`
       INSERT INTO products (
@@ -266,35 +338,35 @@ async function createProduct(req, res, next) {
       sku.trim(),
       barcode.trim(),
       name.trim(),
-      description || null,
-      category_id || null,
-      brand_id || null,
-      supplier_id || null,
+      description ? String(description).trim() : null,
+      category_id ? parseStrictInteger(category_id) : null,
+      brand_id ? parseStrictInteger(brand_id) : null,
+      supplier_id ? parseStrictInteger(supplier_id) : null,
       targetWhId || null,
-      parseFloat(purchase_price) || 0,
-      parseFloat(selling_price) || 0,
-      parseFloat(wholesale_price) || 0,
-      parseInt(min_stock_level, 10) || 5,
-      currentStock,
-      unit || 'pcs',
-      status || 'active'
+      pPrice,
+      sPrice,
+      wPrice,
+      minStock,
+      initStock,
+      unit ? String(unit).trim() : 'pcs',
+      status === 'inactive' ? 'inactive' : 'active'
     ]);
 
     const newProductId = insertResult.insertId;
 
     // Distribute stock to warehouse
-    if (targetWhId && currentStock > 0) {
+    if (targetWhId && initStock > 0) {
       await conn.execute(`
         INSERT INTO warehouse_stock (warehouse_id, product_id, quantity)
         VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
-      `, [targetWhId, newProductId, currentStock]);
+      `, [targetWhId, newProductId, initStock]);
 
       // Stock movement record
       await conn.execute(`
         INSERT INTO stock_movements (product_id, warehouse_id, quantity, movement_type, reference_type, notes, user_id)
         VALUES (?, ?, ?, 'Opening Stock', 'product_creation', 'Initial inventory recorded on product creation', ?)
-      `, [newProductId, targetWhId, currentStock, req.user ? req.user.id : null]);
+      `, [newProductId, targetWhId, initStock, req.user ? req.user.id : null]);
     }
 
     await conn.commit();
@@ -304,12 +376,15 @@ async function createProduct(req, res, next) {
       userName: req.user ? req.user.name : 'System',
       action: 'Create Product',
       module: 'Products',
-      details: `Created product: ${name} (SKU: ${sku}, Barcode: ${barcode}, Stock: ${currentStock})`,
+      details: `Created product: ${name} (SKU: ${sku}, Barcode: ${barcode}, Stock: ${initStock})`,
       ip: req.ip
     });
 
-    const [createdRows] = await query('SELECT * FROM products WHERE id = ?', [newProductId]);
-    return success(res, createdRows, 'Product created successfully', 201);
+    const createdRows = await query('SELECT * FROM products WHERE id = ?', [newProductId]);
+    if (createdRows.length === 0) {
+      throw new Error('Product was created but could not be reloaded.');
+    }
+    return success(res, createdRows[0], 'Product created successfully', 201);
   } catch (err) {
     await conn.rollback();
     next(err);
@@ -323,7 +398,7 @@ async function createProduct(req, res, next) {
  */
 async function updateProduct(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id, 'product ID');
     const {
       sku,
       barcode,
@@ -344,6 +419,37 @@ async function updateProduct(req, res, next) {
     const existing = await query('SELECT * FROM products WHERE id = ?', [id]);
     if (!existing || existing.length === 0) {
       return error(res, 'Product not found', 404);
+    }
+
+    // Validate numeric prices and stock strictly if provided
+    let pPrice = null;
+    let sPrice = null;
+    let wPrice = null;
+    let minStock = null;
+
+    if (purchase_price !== undefined) {
+      pPrice = parseStrictNumber(purchase_price);
+      if (pPrice === null || pPrice < 0 || pPrice > 9999999999.99) {
+        return error(res, 'Purchase price must be a non-negative number', 400);
+      }
+    }
+    if (selling_price !== undefined) {
+      sPrice = parseStrictNumber(selling_price);
+      if (sPrice === null || sPrice < 0 || sPrice > 9999999999.99) {
+        return error(res, 'Selling price must be a non-negative number', 400);
+      }
+    }
+    if (wholesale_price !== undefined) {
+      wPrice = parseStrictNumber(wholesale_price);
+      if (wPrice === null || wPrice < 0 || wPrice > 9999999999.99) {
+        return error(res, 'Wholesale price must be a non-negative number', 400);
+      }
+    }
+    if (min_stock_level !== undefined) {
+      minStock = parseStrictInteger(min_stock_level);
+      if (minStock === null || minStock < 0 || minStock > 2147483647) {
+        return error(res, 'Minimum stock level must be a non-negative integer', 400);
+      }
     }
 
     // Check unique SKU
@@ -383,17 +489,17 @@ async function updateProduct(req, res, next) {
       sku ? sku.trim() : null,
       barcode ? barcode.trim() : null,
       name ? name.trim() : null,
-      description !== undefined ? description : existing[0].description,
-      category_id !== undefined ? category_id : existing[0].category_id,
-      brand_id !== undefined ? brand_id : existing[0].brand_id,
-      supplier_id !== undefined ? supplier_id : existing[0].supplier_id,
-      default_warehouse_id !== undefined ? default_warehouse_id : existing[0].default_warehouse_id,
-      purchase_price !== undefined ? parseFloat(purchase_price) : null,
-      selling_price !== undefined ? parseFloat(selling_price) : null,
-      wholesale_price !== undefined ? parseFloat(wholesale_price) : null,
-      min_stock_level !== undefined ? parseInt(min_stock_level, 10) : null,
-      unit || null,
-      status || null,
+      description !== undefined ? (description ? String(description).trim() : null) : existing[0].description,
+      category_id !== undefined ? (category_id ? parseStrictInteger(category_id) : null) : existing[0].category_id,
+      brand_id !== undefined ? (brand_id ? parseStrictInteger(brand_id) : null) : existing[0].brand_id,
+      supplier_id !== undefined ? (supplier_id ? parseStrictInteger(supplier_id) : null) : existing[0].supplier_id,
+      default_warehouse_id !== undefined ? (default_warehouse_id ? parseStrictInteger(default_warehouse_id) : null) : existing[0].default_warehouse_id,
+      pPrice,
+      sPrice,
+      wPrice,
+      minStock,
+      unit ? String(unit).trim() : null,
+      status ? (status === 'inactive' ? 'inactive' : 'active') : null,
       id
     ]);
 
@@ -415,11 +521,10 @@ async function updateProduct(req, res, next) {
 
 /**
  * DELETE /api/products/:id
- * Soft delete (set status inactive) or hard delete if no transactions
  */
 async function deleteProduct(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id, 'product ID');
     const existing = await query('SELECT * FROM products WHERE id = ?', [id]);
     if (!existing || existing.length === 0) {
       return error(res, 'Product not found', 404);

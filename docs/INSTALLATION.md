@@ -58,11 +58,18 @@ DB_PASSWORD=
 DB_NAME=inventory_management
 
 # Authentication (JWT)
-JWT_SECRET=8f511fdde3cc6b205960fdc6089779ca68570eb46ef7e86b78ca5621bf5121a3
+# Generate a unique secret with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+JWT_SECRET=replace-with-a-unique-random-secret
 JWT_EXPIRES_IN=7d
 
 # CORS Configuration
 CORS_ORIGIN=*
+
+# First administrator bootstrap
+BUSINESS_NAME=
+SEED_ADMIN_NAME=
+SEED_ADMIN_EMAIL=
+SEED_ADMIN_PASSWORD=
 ```
 
 ---
@@ -87,23 +94,19 @@ The core dependencies include:
 
 ## 5. Database Setup & Seeding
 
-Run the migration script to create all 28 tables and foreign key constraints:
+Run the migration script to create the database schema and apply all versioned migrations:
 
 ```bash
 npm run migrate
 ```
 
-Seed the database with sample business records, categories, warehouses, products, and role-based staff accounts:
+Initialize the first administrator and required role permissions. Set `SEED_ADMIN_NAME`, `SEED_ADMIN_EMAIL`, and a unique `SEED_ADMIN_PASSWORD` of at least 12 characters in `.env` first:
 
 ```bash
 npm run seed
 ```
 
-Alternatively, run both setup steps in one command:
-
-```bash
-npm run setup
-```
+This guarded bootstrap creates default business settings and one administrator, but no sample customers, suppliers, products, warehouses, inventory, or transactions. Create your own business records after signing in.
 
 ---
 
@@ -136,14 +139,4 @@ http://localhost:5000
 
 The system will redirect you to the **Enterprise Login** page (`/login.html`).
 
-### Demo Accounts
-
-| Role | Email | Password |
-|---|---|---|
-| **Admin** | `admin@apexinventory.com` | `Admin@123` |
-| **Manager** | `manager@apexinventory.com` | `Manager@123` |
-| **Sales / Cashier** | `sales@apexinventory.com` | `Sales@123` |
-| **Inventory Auditor**| `inventory@apexinventory.com` | `Inventory@123` |
-| **Accountant** | `accountant@apexinventory.com` | `Accountant@123` |
-
-Quick-login pill buttons are available on the login page for instant testing.
+Sign in with the administrator credentials configured in `.env`. No demo accounts or business records are created; add your own users and business data after signing in.

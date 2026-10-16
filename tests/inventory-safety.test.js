@@ -28,11 +28,11 @@ function databaseConnection(database) {
   });
 }
 
-function runDatabaseScript(script, database) {
+function runDatabaseScript(script, database, extraEnv = {}) {
   const result = spawnSync(process.execPath, [script], {
     cwd: projectRoot,
     encoding: 'utf8',
-    env: { ...process.env, DB_NAME: database }
+    env: { ...process.env, DB_NAME: database, ...extraEnv }
   });
   assert.equal(
     result.status,
@@ -62,6 +62,27 @@ test('HTML escaping renders script-like input as inert text', () => {
   assert.equal(rendered, '&lt;img src=x onerror=&quot;globalThis.pwned=true&quot;&gt;');
   assert.doesNotMatch(rendered, /<\s*img\b/i);
   assert.equal(context.pwned, undefined);
+});
+
+test('Sales History provides an authenticated Create Sale entry point', () => {
+  const history = fs.readFileSync(path.join(projectRoot, 'frontend', 'sales', 'list.html'), 'utf8');
+  const register = fs.readFileSync(path.join(projectRoot, 'frontend', 'sales', 'index.html'), 'utf8');
+
+  assert.match(history, /id="create-sale-link"[^>]*href="\/sales\/index\.html"/);
+  assert.match(history, /fa-cash-register mr-2[^<]*<\/i>\s*Create Sale/);
+  assert.match(register, /async function submitSaleTransaction\(\)/);
+  assert.match(register, /API\.post\('\/sales', payload, \{ 'Idempotency-Key': pendingSaleKey \}\)/);
+});
+
+test('strict numeric parsing rejects malformed trade values before they reach the database', () => {
+  const validatorPath = path.join(projectRoot, 'backend', 'validators', 'input.validator.js');
+  const { parseStrictNumber, parseStrictDecimal, parseStrictPositiveInteger } = require(validatorPath);
+
+  assert.equal(parseStrictNumber('12abc'), null);
+  assert.equal(parseStrictDecimal('12abc', { min: 0 }), null);
+  assert.equal(parseStrictPositiveInteger('12abc'), null);
+  assert.equal(parseStrictNumber('12.50'), 12.5);
+  assert.equal(parseStrictPositiveInteger('7'), 7);
 });
 
 test('isolated database migrations preserve data and transactional workflows remain consistent', {
@@ -101,7 +122,9 @@ test('isolated database migrations preserve data and transactional workflows rem
         assert.deepEqual(versions.map(row => row.version), [
           '001_initial_schema.js',
           '002_document_sequences.js',
-          '003_return_idempotency_and_refunds.js'
+          '003_return_idempotency_and_refunds.js',
+          '004_revoked_tokens.js',
+          '005_pos_sale_idempotency.js'
         ]);
         const [tables] = await connection.execute(
           "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales'"
@@ -109,6 +132,37 @@ test('isolated database migrations preserve data and transactional workflows rem
         assert.equal(tables.length, 1);
       } finally {
         await connection.end();
+      }
+
+      runDatabaseScript('database/seed.js', emptyDb, {
+        SEED_ADMIN_NAME: 'Isolated Test Administrator',
+        SEED_ADMIN_EMAIL: 'bootstrap@example.invalid',
+        SEED_ADMIN_PASSWORD: 'isolated-bootstrap-password-2026'
+      });
+      const seeded = await databaseConnection(emptyDb);
+      try {
+        const [[userCount]] = await seeded.execute('SELECT COUNT(*) AS total FROM users');
+        const [[permissionCount]] = await seeded.execute('SELECT COUNT(*) AS total FROM permissions');
+        const [[settingsCount]] = await seeded.execute('SELECT COUNT(*) AS total FROM settings');
+        const [[productCount]] = await seeded.execute('SELECT COUNT(*) AS total FROM products');
+        const [[customerCount]] = await seeded.execute('SELECT COUNT(*) AS total FROM customers');
+        const [[supplierCount]] = await seeded.execute('SELECT COUNT(*) AS total FROM suppliers');
+        const [[warehouseCount]] = await seeded.execute('SELECT COUNT(*) AS total FROM warehouses');
+        const [[salesCount]] = await seeded.execute('SELECT COUNT(*) AS total FROM sales');
+        assert.equal(Number(userCount.total), 1);
+        assert.equal(Number(permissionCount.total), 34);
+        assert.equal(Number(settingsCount.total), 1);
+        assert.equal(Number(productCount.total), 0);
+        assert.equal(Number(customerCount.total), 0);
+        assert.equal(Number(supplierCount.total), 0);
+        assert.equal(Number(warehouseCount.total), 0);
+        assert.equal(Number(salesCount.total), 0);
+        const [posPermissions] = await seeded.execute(
+          "SELECT permission FROM role_permissions WHERE role = 'Sales' AND permission IN ('categories.view', 'warehouses.view') ORDER BY permission"
+        );
+        assert.deepEqual(posPermissions.map(row => row.permission), ['categories.view', 'warehouses.view']);
+      } finally {
+        await seeded.end();
       }
     });
 
@@ -233,8 +287,68 @@ test('isolated database migrations preserve data and transactional workflows rem
         );
         const [[user]] = await connection.execute('SELECT id FROM users WHERE email = ?', ['test-admin@example.invalid']);
         await connection.execute(
-          "INSERT INTO role_permissions (role, permission) VALUES ('Admin', 'sales.create'), ('Admin', 'returns.create'), ('Admin', 'payments.manage'), ('Admin', 'debts.manage')"
+          "INSERT INTO role_permissions (role, permission) VALUES ('Admin', 'products.create'), ('Admin', 'customers.manage'), ('Admin', 'suppliers.manage'), ('Admin', 'sales.create'), ('Admin', 'sales.view'), ('Admin', 'returns.create'), ('Admin', 'payments.manage'), ('Admin', 'debts.manage')"
         );
+        await connection.execute(
+          "INSERT INTO settings (business_name, tax_rate, invoice_prefix) VALUES ('Isolated Test Business', 0, 'TEST-INV-')"
+        );
+        token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '5m' });
+        const newCustomerResponse = await fetch(`http://127.0.0.1:${port}/api/customers`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ name: 'New Test Customer' })
+        });
+        const newCustomerResult = await newCustomerResponse.json();
+        assert.equal(newCustomerResponse.status, 201, newCustomerResult.message);
+        assert.equal(newCustomerResult.data.name, 'New Test Customer');
+
+        const newSupplierResponse = await fetch(`http://127.0.0.1:${port}/api/suppliers`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ name: 'New Test Supplier' })
+        });
+        const newSupplierResult = await newSupplierResponse.json();
+        assert.equal(newSupplierResponse.status, 201, newSupplierResult.message);
+        assert.equal(newSupplierResult.data.name, 'New Test Supplier');
+
+        const emptyStockProduct = await fetch(`http://127.0.0.1:${port}/api/products`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sku: 'TEST-NO-WAREHOUSE',
+            barcode: 'TEST-BAR-NO-WAREHOUSE',
+            name: 'Product without a warehouse',
+            initial_stock: 0
+          })
+        });
+        const emptyStockResult = await emptyStockProduct.json();
+        assert.equal(emptyStockProduct.status, 201, emptyStockResult.message);
+        assert.equal(emptyStockResult.data.default_warehouse_id, null);
+
+        const initialStockWithoutWarehouse = await fetch(`http://127.0.0.1:${port}/api/products`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sku: 'TEST-STOCK-NO-WAREHOUSE',
+            barcode: 'TEST-BAR-STOCK-NO-WAREHOUSE',
+            name: 'Stocked product without a warehouse',
+            initial_stock: 1
+          })
+        });
+        assert.equal(initialStockWithoutWarehouse.status, 400);
+
         const [warehouseInsert] = await connection.execute(
           "INSERT INTO warehouses (name, location, status) VALUES ('Test Warehouse', 'Isolated test fixture', 'active')"
         );
@@ -255,8 +369,8 @@ test('isolated database migrations preserve data and transactional workflows rem
           const [productInsert] = await connection.execute(
             `INSERT INTO products
               (sku, barcode, name, selling_price, purchase_price, current_stock, status)
-             VALUES (?, ?, ?, 10, 5, ?, 'active')`,
-            [sku, barcode, name, quantity]
+             VALUES (?, ?, ?, ?, 5, ?, 'active')`,
+            [sku, barcode, name, sku === 'TEST-CREDIT' ? 50 : 10, quantity]
           );
           productIds.push(productInsert.insertId);
           await connection.execute(
@@ -271,27 +385,66 @@ test('isolated database migrations preserve data and transactional workflows rem
       }
 
       async function request(method, route, body, headers = {}) {
+        const requestHeaders = { ...headers };
+        if (method === 'POST' && route === '/sales' && !requestHeaders['Idempotency-Key']) {
+          requestHeaders['Idempotency-Key'] = crypto.randomUUID();
+        }
         const response = await fetch(`http://127.0.0.1:${port}/api${route}`, {
           method,
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
-            ...headers
+            ...requestHeaders
           },
           body: body === undefined ? undefined : JSON.stringify(body)
         });
         return { status: response.status, body: await response.json() };
       }
 
-      const saleResponse = await request('POST', '/sales', {
+      const unauthorizedSale = await fetch(`http://127.0.0.1:${port}/api/sales`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makeSale(customerId, warehouseId, saleProductId, 1, 10, 10))
+      });
+      assert.equal(unauthorizedSale.status, 401);
+      const saleWithoutKey = await fetch(`http://127.0.0.1:${port}/api/sales`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(makeSale(customerId, warehouseId, saleProductId, 1, 10, 10))
+      });
+      assert.equal(saleWithoutKey.status, 400);
+
+      const warehouseProducts = await request('GET', `/products?warehouse_id=${warehouseId}&status=active`);
+      assert.equal(warehouseProducts.status, 200);
+      const listedProduct = warehouseProducts.body.data.products.find(product => product.id === saleProductId);
+      assert.equal(Number(listedProduct.warehouse_quantity), 10);
+
+      const salePayload = {
         ...makeSale(customerId, warehouseId, saleProductId, 6, 10, 60),
         items: [
           { product_id: saleProductId, quantity: 3, unit_price: 10 },
           { product_id: saleProductId, quantity: 3, unit_price: 10 }
         ]
+      };
+      const saleIdempotencyKey = crypto.randomUUID();
+      const saleResponse = await request('POST', '/sales', salePayload, {
+        'Idempotency-Key': saleIdempotencyKey
       });
       assert.equal(saleResponse.status, 201, saleResponse.body.message);
       const saleId = saleResponse.body.data.id;
+      const repeatedSale = await request('POST', '/sales', salePayload, {
+        'Idempotency-Key': saleIdempotencyKey
+      });
+      assert.equal(repeatedSale.status, 200, repeatedSale.body.message);
+      assert.equal(repeatedSale.body.data.id, saleId, 'retry must return the original sale');
+      const reusedKey = await request('POST', '/sales', {
+        ...salePayload,
+        notes: 'Different request'
+      }, { 'Idempotency-Key': saleIdempotencyKey });
+      assert.equal(reusedKey.status, 409);
 
       const stockConnection = await databaseConnection(appDb);
       try {
@@ -317,6 +470,69 @@ test('isolated database migrations preserve data and transactional workflows rem
         ...makeSale(customerId, warehouseId, saleProductId, 1, -1, 0)
       });
       assert.equal(invalidPrice.status, 400);
+
+      const priceTampering = await request('POST', '/sales', {
+        ...makeSale(customerId, warehouseId, saleProductId, 1, 1, 1)
+      });
+      assert.equal(priceTampering.status, 409, 'client prices must match the locked database selling price');
+
+      const taxSettings = await databaseConnection(appDb);
+      try {
+        await taxSettings.execute('UPDATE settings SET tax_rate = 10');
+      } finally {
+        await taxSettings.end();
+      }
+      const multiProductPayload = {
+        ...makeSale(null, warehouseId, saleProductId, 1, 10, 22),
+        items: [
+          { product_id: saleProductId, quantity: 1, unit_price: 10 },
+          { product_id: productIds[3], quantity: 1, unit_price: 10 }
+        ],
+        tax: 500
+      };
+      const multiProductSale = await request('POST', '/sales', multiProductPayload, {
+        'Idempotency-Key': crypto.randomUUID()
+      });
+      assert.equal(multiProductSale.status, 201, multiProductSale.body.message);
+      assert.equal(Number(multiProductSale.body.data.subtotal), 20);
+      assert.equal(Number(multiProductSale.body.data.tax), 2, 'tax must come from business settings');
+      assert.equal(Number(multiProductSale.body.data.total), 22);
+      assert.equal(multiProductSale.body.data.items.length, 2);
+      const relatedSaleRecords = await databaseConnection(appDb);
+      try {
+        const [[saleItems]] = await relatedSaleRecords.execute(
+          'SELECT COUNT(*) AS total FROM sale_items WHERE sale_id = ?',
+          [multiProductSale.body.data.id]
+        );
+        const [[invoiceCount]] = await relatedSaleRecords.execute(
+          'SELECT COUNT(*) AS total FROM invoices WHERE sale_id = ?',
+          [multiProductSale.body.data.id]
+        );
+        const [[paymentCount]] = await relatedSaleRecords.execute(
+          "SELECT COUNT(*) AS total FROM payments WHERE reference_id = ? AND payment_type = 'Customer Sale'",
+          [multiProductSale.body.data.id]
+        );
+        const [[movementCount]] = await relatedSaleRecords.execute(
+          "SELECT COUNT(*) AS total FROM stock_movements WHERE reference_type = 'sale' AND reference_id = ?",
+          [multiProductSale.body.data.id]
+        );
+        assert.deepEqual(
+          [saleItems.total, invoiceCount.total, paymentCount.total, movementCount.total].map(Number),
+          [2, 1, 1, 2]
+        );
+      } finally {
+        await relatedSaleRecords.end();
+      }
+      const taxReset = await databaseConnection(appDb);
+      try {
+        await taxReset.execute('UPDATE settings SET tax_rate = 0');
+      } finally {
+        await taxReset.end();
+      }
+
+      const completedSaleHistory = await request('GET', '/sales');
+      assert.equal(completedSaleHistory.status, 200);
+      assert.ok(completedSaleHistory.body.data.sales.some(sale => sale.id === saleId));
 
       const concurrentPayload = makeSale(customerId, warehouseId, concurrentProductId, 3, 10, 30);
       const concurrentResults = await Promise.all([
@@ -419,6 +635,12 @@ test('isolated database migrations preserve data and transactional workflows rem
         await verifyFinance.end();
       }
 
+      const updateCreditPrice = await databaseConnection(appDb);
+      try {
+        await updateCreditPrice.execute('UPDATE products SET selling_price = 30 WHERE id = ?', [creditProductId]);
+      } finally {
+        await updateCreditPrice.end();
+      }
       const secondCreditSale = await request('POST', '/sales', makeSale(
         customerId, warehouseId, creditProductId, 1, 30, 0
       ));

@@ -1,7 +1,14 @@
 const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const {
+  validateRequired,
+  validateId,
+  parsePagination,
+  parseStrictDecimal,
+  parseStrictPositiveInteger,
+  parseStrictNumber
+} = require('../validators/input.validator');
 const { nextDocumentNumber } = require('../utils/document-number');
 
 /**
@@ -9,8 +16,8 @@ const { nextDocumentNumber } = require('../utils/document-number');
  */
 async function getAllPurchases(req, res, next) {
   try {
-    const { search, supplier_id, warehouse_id, payment_status, start_date, end_date, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { search, supplier_id, warehouse_id, payment_status, start_date, end_date } = req.query;
+    const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
     const where = [];
 
@@ -70,15 +77,15 @@ async function getAllPurchases(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const purchases = await query(dataSql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    const purchases = await query(dataSql, [...params, limit, offset]);
 
     return success(res, {
       purchases,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Purchases fetched successfully');
   } catch (err) {
@@ -91,7 +98,10 @@ async function getAllPurchases(req, res, next) {
  */
 async function getPurchaseById(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return error(res, 'Valid purchase ID is required', 400);
+    }
     const rows = await query(`
       SELECT 
         p.*,
@@ -203,21 +213,22 @@ async function createPurchase(req, res, next) {
     const validatedItems = [];
 
     for (const item of items) {
-      const qty = parseInt(item.quantity, 10);
-      const price = parseFloat(item.purchase_price);
-      const itemDisc = parseFloat(item.discount || 0);
-      const itemTax = parseFloat(item.tax || 0);
+      const productId = parseStrictPositiveInteger(item.product_id);
+      const qty = parseStrictPositiveInteger(item.quantity);
+      const price = parseStrictDecimal(item.purchase_price, { min: 0 });
+      const itemDisc = parseStrictDecimal(item.discount ?? 0, { min: 0 });
+      const itemTax = parseStrictDecimal(item.tax ?? 0, { min: 0 });
 
-      if (!item.product_id || isNaN(qty) || qty <= 0 || isNaN(price) || price < 0) {
+      if (productId === null || qty === null || price === null || itemDisc === null || itemTax === null) {
         await conn.rollback();
         return error(res, 'Invalid quantity or price for one or more purchase items', 400);
       }
 
-      const itemTotal = (qty * price) - itemDisc + itemTax;
+      const itemTotal = Number(((qty * price) - itemDisc + itemTax).toFixed(2));
       subtotal += (qty * price);
 
       validatedItems.push({
-        product_id: item.product_id,
+        product_id: productId,
         quantity: qty,
         purchase_price: price,
         discount: itemDisc,
@@ -226,10 +237,15 @@ async function createPurchase(req, res, next) {
       });
     }
 
-    const discountVal = parseFloat(discount) || 0;
-    const taxVal = parseFloat(tax) || 0;
-    const grandTotal = subtotal - discountVal + taxVal;
-    const paidVal = Math.min(grandTotal, Math.max(0, parseFloat(paid_amount) || 0));
+    const discountVal = parseStrictDecimal(discount ?? 0, { min: 0 });
+    const taxVal = parseStrictDecimal(tax ?? 0, { min: 0 });
+    const paidValRaw = parseStrictDecimal(paid_amount ?? 0, { min: 0 });
+    if (discountVal === null || taxVal === null || paidValRaw === null) {
+      await conn.rollback();
+      return error(res, 'Invalid purchase discount, tax, or paid amount', 400);
+    }
+    const grandTotal = Number((subtotal - discountVal + taxVal).toFixed(2));
+    const paidVal = Math.min(grandTotal, paidValRaw);
     const remainingVal = Math.max(0, grandTotal - paidVal);
 
     let paymentStatus = 'Unpaid';

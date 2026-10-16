@@ -1,7 +1,7 @@
 const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const { validateRequired, parsePagination, parseStrictPositiveInteger } = require('../validators/input.validator');
 const { nextDocumentNumber } = require('../utils/document-number');
 
 /**
@@ -9,8 +9,8 @@ const { nextDocumentNumber } = require('../utils/document-number');
  */
 async function getAllAdjustments(req, res, next) {
   try {
-    const { product_id, warehouse_id, type, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { product_id, warehouse_id, type } = req.query;
+    const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
     const where = [];
 
@@ -51,15 +51,15 @@ async function getAllAdjustments(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const adjustments = await query(dataSql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    const adjustments = await query(dataSql, [...params, limit, offset]);
 
     return success(res, {
       adjustments,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Stock adjustments fetched');
   } catch (err) {
@@ -89,10 +89,12 @@ async function createAdjustment(req, res, next) {
       return error(res, `Missing required fields: ${missing.join(', ')}`, 400);
     }
 
-    const qty = parseInt(adjustment_quantity, 10);
-    if (isNaN(qty) || qty <= 0) {
+    const productId = parseStrictPositiveInteger(product_id);
+    const warehouseId = parseStrictPositiveInteger(warehouse_id);
+    const qty = parseStrictPositiveInteger(adjustment_quantity);
+    if (productId === null || warehouseId === null || qty === null) {
       await conn.rollback();
-      return error(res, 'Adjustment quantity must be a positive number', 400);
+      return error(res, 'Product, warehouse, and adjustment quantity must be valid positive integers', 400);
     }
 
     if (adjustment_type !== 'Increase' && adjustment_type !== 'Decrease') {
@@ -105,7 +107,7 @@ async function createAdjustment(req, res, next) {
       SELECT quantity FROM warehouse_stock 
       WHERE warehouse_id = ? AND product_id = ?
       FOR UPDATE
-    `, [warehouse_id, product_id]);
+    `, [warehouseId, productId]);
 
     const currentQty = wsRows.length > 0 ? wsRows[0].quantity : 0;
     let newQty;
@@ -132,8 +134,8 @@ async function createAdjustment(req, res, next) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       adjustmentNumber,
-      product_id,
-      warehouse_id,
+      productId,
+      warehouseId,
       adjustment_type,
       currentQty,
       qty,
@@ -150,11 +152,11 @@ async function createAdjustment(req, res, next) {
       INSERT INTO warehouse_stock (warehouse_id, product_id, quantity)
       VALUES (?, ?, ?)
       ON DUPLICATE KEY UPDATE quantity = VALUES(quantity)
-    `, [warehouse_id, product_id, newQty]);
+    `, [warehouseId, productId, newQty]);
 
     // 3. Update product total current_stock
     const delta = adjustment_type === 'Increase' ? qty : -qty;
-    await conn.execute('UPDATE products SET current_stock = current_stock + ? WHERE id = ?', [delta, product_id]);
+    await conn.execute('UPDATE products SET current_stock = current_stock + ? WHERE id = ?', [delta, productId]);
 
     // 4. Create stock movement
     await conn.execute(`
@@ -162,8 +164,8 @@ async function createAdjustment(req, res, next) {
         product_id, warehouse_id, quantity, movement_type, reference_type, reference_id, notes, user_id
       ) VALUES (?, ?, ?, 'Adjustment', 'adjustment', ?, ?, ?)
     `, [
-      product_id,
-      warehouse_id,
+      productId,
+      warehouseId,
       delta,
       adjId,
       `Adjustment ${adjustmentNumber}: ${reason}`,
@@ -177,7 +179,7 @@ async function createAdjustment(req, res, next) {
       userName: req.user ? req.user.name : 'System',
       action: 'Stock Adjustment',
       module: 'Stock',
-      details: `${adjustment_type} by ${qty} for Product #${product_id} in Warehouse #${warehouse_id} (${adjustmentNumber}).`,
+      details: `${adjustment_type} by ${qty} for Product #${productId} in Warehouse #${warehouseId} (${adjustmentNumber}).`,
       ip: req.ip
     });
 

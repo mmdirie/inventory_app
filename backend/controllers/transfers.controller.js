@@ -1,7 +1,7 @@
 const { query, getTransactionConnection } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const { validateRequired, parsePagination, parseStrictPositiveInteger } = require('../validators/input.validator');
 const { nextDocumentNumber } = require('../utils/document-number');
 
 /**
@@ -9,8 +9,8 @@ const { nextDocumentNumber } = require('../utils/document-number');
  */
 async function getAllTransfers(req, res, next) {
   try {
-    const { status, source_id, destination_id, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { status, source_id, destination_id } = req.query;
+    const { page, limit, offset } = parsePagination(req.query, 20, 100);
     const params = [];
     const where = [];
 
@@ -51,15 +51,15 @@ async function getAllTransfers(req, res, next) {
       LIMIT ? OFFSET ?
     `;
 
-    const transfers = await query(dataSql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
+    const transfers = await query(dataSql, [...params, limit, offset]);
 
     return success(res, {
       transfers,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        total_pages: Math.ceil(total / parseInt(limit, 10))
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit)
       }
     }, 'Stock transfers fetched');
   } catch (err) {
@@ -133,7 +133,14 @@ async function createTransfer(req, res, next) {
       return error(res, `Missing required fields: ${missing.join(', ')}`, 400);
     }
 
-    if (source_warehouse_id == destination_warehouse_id) {
+    const sourceWarehouseId = parseStrictPositiveInteger(source_warehouse_id);
+    const destinationWarehouseId = parseStrictPositiveInteger(destination_warehouse_id);
+    if (sourceWarehouseId === null || destinationWarehouseId === null) {
+      await conn.rollback();
+      return error(res, 'Warehouse IDs must be valid positive integers', 400);
+    }
+
+    if (sourceWarehouseId === destinationWarehouseId) {
       await conn.rollback();
       return error(res, 'Source and destination warehouses cannot be the same', 400);
     }
@@ -154,8 +161,8 @@ async function createTransfer(req, res, next) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [
       transferNumber,
-      source_warehouse_id,
-      destination_warehouse_id,
+      sourceWarehouseId,
+      destinationWarehouseId,
       transfer_date,
       initialStatus,
       notes || null,
@@ -165,8 +172,9 @@ async function createTransfer(req, res, next) {
     const transferId = transferRes.insertId;
 
     for (const item of items) {
-      const qty = parseInt(item.quantity, 10);
-      if (!item.product_id || isNaN(qty) || qty <= 0) {
+      const productId = parseStrictPositiveInteger(item.product_id);
+      const qty = parseStrictPositiveInteger(item.quantity);
+      if (productId === null || qty === null) {
         await conn.rollback();
         return error(res, 'Invalid product or quantity for transfer item', 400);
       }
@@ -174,7 +182,7 @@ async function createTransfer(req, res, next) {
       await conn.execute(`
         INSERT INTO stock_transfer_items (transfer_id, product_id, quantity)
         VALUES (?, ?, ?)
-      `, [transferId, item.product_id, qty]);
+      `, [transferId, productId, qty]);
 
       // If auto-completing, apply movements and check stock
       if (auto_complete) {
@@ -182,12 +190,12 @@ async function createTransfer(req, res, next) {
           SELECT quantity FROM warehouse_stock 
           WHERE warehouse_id = ? AND product_id = ?
           FOR UPDATE
-        `, [source_warehouse_id, item.product_id]);
+        `, [sourceWarehouseId, productId]);
 
         const avail = sourceStock.length > 0 ? sourceStock[0].quantity : 0;
         if (avail < qty) {
           await conn.rollback();
-          return error(res, `Insufficient stock at source warehouse for Product #${item.product_id}. Available: ${avail}, Requested: ${qty}`, 400);
+          return error(res, `Insufficient stock at source warehouse for Product #${productId}. Available: ${avail}, Requested: ${qty}`, 400);
         }
 
         // Deduct from source
@@ -195,14 +203,14 @@ async function createTransfer(req, res, next) {
           UPDATE warehouse_stock 
           SET quantity = quantity - ? 
           WHERE warehouse_id = ? AND product_id = ?
-        `, [qty, source_warehouse_id, item.product_id]);
+        `, [qty, sourceWarehouseId, productId]);
 
         // Add to destination
         await conn.execute(`
           INSERT INTO warehouse_stock (warehouse_id, product_id, quantity)
           VALUES (?, ?, ?)
           ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
-        `, [destination_warehouse_id, item.product_id, qty]);
+        `, [destinationWarehouseId, productId, qty]);
 
         // Movements
         await conn.execute(`
@@ -211,8 +219,8 @@ async function createTransfer(req, res, next) {
           (?, ?, ?, 'Transfer', 'transfer_out', ?, ?, ?),
           (?, ?, ?, 'Transfer', 'transfer_in', ?, ?, ?)
         `, [
-          item.product_id, source_warehouse_id, -qty, transferId, `Transfer ${transferNumber} to Destination`, userId,
-          item.product_id, destination_warehouse_id, qty, transferId, `Transfer ${transferNumber} from Source`, userId
+          productId, sourceWarehouseId, -qty, transferId, `Transfer ${transferNumber} to Destination`, userId,
+          productId, destinationWarehouseId, qty, transferId, `Transfer ${transferNumber} from Source`, userId
         ]);
       }
     }

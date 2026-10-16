@@ -1,7 +1,7 @@
 const { query } = require('../config/db');
 const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
-const { validateRequired } = require('../validators/input.validator');
+const { validateRequired, validateId } = require('../validators/input.validator');
 
 async function getAllBrands(req, res, next) {
   try {
@@ -14,12 +14,15 @@ async function getAllBrands(req, res, next) {
     const params = [];
     const where = [];
 
-    if (search && search.trim() !== '') {
+    if (search && typeof search === 'string' && search.trim() !== '') {
       where.push('(b.name LIKE ? OR b.description LIKE ?)');
       params.push(`%${search.trim()}%`, `%${search.trim()}%`);
     }
 
     if (status) {
+      if (status !== 'active' && status !== 'inactive') {
+        return error(res, 'Invalid status parameter', 400);
+      }
       where.push('b.status = ?');
       params.push(status);
     }
@@ -39,7 +42,8 @@ async function getAllBrands(req, res, next) {
 
 async function getBrandById(req, res, next) {
   try {
-    const rows = await query('SELECT * FROM brands WHERE id = ?', [req.params.id]);
+    const id = validateId(req.params.id, 'brand ID');
+    const rows = await query('SELECT * FROM brands WHERE id = ?', [id]);
     if (!rows || rows.length === 0) {
       return error(res, 'Brand not found', 404);
     }
@@ -57,14 +61,19 @@ async function createBrand(req, res, next) {
       return error(res, 'Brand name is required', 400);
     }
 
-    const existing = await query('SELECT id FROM brands WHERE name = ?', [name.trim()]);
+    const safeName = name.trim();
+    if (safeName.length === 0) {
+      return error(res, 'Brand name cannot be empty', 400);
+    }
+
+    const existing = await query('SELECT id FROM brands WHERE name = ?', [safeName]);
     if (existing.length > 0) {
-      return error(res, `Brand '${name}' already exists`, 409);
+      return error(res, `Brand '${safeName}' already exists`, 409);
     }
 
     const result = await query(
       'INSERT INTO brands (name, description, status) VALUES (?, ?, ?)',
-      [name.trim(), description || null, status]
+      [safeName, description ? String(description).trim() : null, status === 'inactive' ? 'inactive' : 'active']
     );
 
     await logAction({
@@ -72,7 +81,7 @@ async function createBrand(req, res, next) {
       userName: req.user ? req.user.name : 'System',
       action: 'Create Brand',
       module: 'Brands',
-      details: `Created brand: ${name.trim()}`,
+      details: `Created brand: ${safeName}`,
       ip: req.ip
     });
 
@@ -85,7 +94,7 @@ async function createBrand(req, res, next) {
 
 async function updateBrand(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id, 'brand ID');
     const { name, description, status } = req.body;
 
     const existing = await query('SELECT * FROM brands WHERE id = ?', [id]);
@@ -93,10 +102,11 @@ async function updateBrand(req, res, next) {
       return error(res, 'Brand not found', 404);
     }
 
-    if (name && name.trim() !== existing[0].name) {
-      const dup = await query('SELECT id FROM brands WHERE name = ? AND id != ?', [name.trim(), id]);
+    if (name && typeof name === 'string' && name.trim() !== existing[0].name) {
+      const safeName = name.trim();
+      const dup = await query('SELECT id FROM brands WHERE name = ? AND id != ?', [safeName, id]);
       if (dup.length > 0) {
-        return error(res, `Brand '${name}' already exists`, 409);
+        return error(res, `Brand '${safeName}' already exists`, 409);
       }
     }
 
@@ -106,7 +116,12 @@ async function updateBrand(req, res, next) {
         description = ?,
         status = COALESCE(?, status)
       WHERE id = ?
-    `, [name ? name.trim() : null, description !== undefined ? description : existing[0].description, status || null, id]);
+    `, [
+      name && typeof name === 'string' ? name.trim() : null,
+      description !== undefined ? (description ? String(description).trim() : null) : existing[0].description,
+      status ? (status === 'inactive' ? 'inactive' : 'active') : null,
+      id
+    ]);
 
     await logAction({
       userId: req.user ? req.user.id : null,
@@ -126,9 +141,9 @@ async function updateBrand(req, res, next) {
 
 async function deleteBrand(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id, 'brand ID');
     const [pRef] = await query('SELECT COUNT(*) as count FROM products WHERE brand_id = ?', [id]);
-    if (pRef.count > 0) {
+    if (pRef && pRef.count > 0) {
       return error(res, `Cannot delete brand. There are ${pRef.count} products assigned to it.`, 400);
     }
 
