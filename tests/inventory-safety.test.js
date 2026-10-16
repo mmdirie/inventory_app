@@ -108,7 +108,7 @@ test('strict numeric parsing rejects malformed trade values before they reach th
 });
 
 test('suggested EAN-13 barcodes contain twelve payload digits and a valid check digit', () => {
-  const { createEan13Candidate } = require('../backend/controllers/barcode.controller');
+  const { createEan13Candidate } = require('../backend/utils/barcode');
   const barcode = createEan13Candidate();
   const weightedSum = [...barcode].reduce(
     (sum, digit, index) => sum + Number(digit) * (index % 2 === 0 ? 1 : 3),
@@ -315,11 +315,14 @@ test('isolated database migrations preserve data and transactional workflows rem
       const app = require(path.join(projectRoot, 'backend', 'server.js'));
       const dbModule = require(path.join(projectRoot, 'backend', 'config', 'db.js'));
       appPool = dbModule.pool;
+      const [poolDatabase] = await dbModule.query('SELECT DATABASE() AS database_name');
+      assert.equal(poolDatabase.database_name, appDb, 'integration tests must use their isolated database');
       server = app.listen(0);
       await once(server, 'listening');
       const port = server.address().port;
       const connection = await databaseConnection(appDb);
       let customerId;
+      let supplierId;
       let warehouseId;
       let saleProductId;
       let concurrentProductId;
@@ -362,6 +365,7 @@ test('isolated database migrations preserve data and transactional workflows rem
         const newSupplierResult = await newSupplierResponse.json();
         assert.equal(newSupplierResponse.status, 201, newSupplierResult.message);
         assert.equal(newSupplierResult.data.name, 'New Test Supplier');
+        supplierId = newSupplierResult.data.id;
 
         const emptyStockProduct = await fetch(`http://127.0.0.1:${port}/api/products`, {
           method: 'POST',
@@ -445,6 +449,296 @@ test('isolated database migrations preserve data and transactional workflows rem
           body: body === undefined ? undefined : JSON.stringify(body)
         });
         return { status: response.status, body: await response.json() };
+      }
+
+      const categoryResponse = await request('POST', '/categories', { name: 'E2E Category' });
+      assert.equal(categoryResponse.status, 201, categoryResponse.body.message);
+      const categoryId = categoryResponse.body.data.id;
+      const brandResponse = await request('POST', '/brands', { name: 'E2E Brand' });
+      assert.equal(brandResponse.status, 201, brandResponse.body.message);
+      const brandId = brandResponse.body.data.id;
+
+      const stockedProductResponse = await request('POST', '/products', {
+        sku: 'TEST-STOCKED-DELETE',
+        barcode: 'TEST-BAR-STOCKED-DELETE',
+        name: 'Stocked Product Delete Protection',
+        category_id: categoryId,
+        brand_id: brandId,
+        supplier_id: supplierId,
+        default_warehouse_id: warehouseId,
+        purchase_price: 5,
+        selling_price: 10,
+        initial_stock: 2
+      });
+      assert.equal(stockedProductResponse.status, 201, stockedProductResponse.body.message);
+      const stockedProductId = stockedProductResponse.body.data.id;
+      const stockedProductDetails = await request('GET', `/products/${stockedProductId}`);
+      assert.equal(stockedProductDetails.status, 200);
+      assert.equal(Number(stockedProductDetails.body.data.category_id), categoryId);
+      assert.equal(Number(stockedProductDetails.body.data.brand_id), brandId);
+      assert.equal(Number(stockedProductDetails.body.data.supplier_id), supplierId);
+      assert.equal(Number(stockedProductDetails.body.data.warehouse_stock[0].quantity), 2);
+
+      const updatedProduct = await request('PUT', `/products/${stockedProductId}`, {
+        name: 'Updated Stocked Product',
+        barcode: 'TEST-BAR-STOCKED-UPDATED',
+        selling_price: 12
+      });
+      assert.equal(updatedProduct.status, 200, updatedProduct.body.message);
+      assert.equal(updatedProduct.body.data.name, 'Updated Stocked Product');
+      assert.equal(Number(updatedProduct.body.data.selling_price), 12);
+      assert.equal(Number(updatedProduct.body.data.category_id), categoryId);
+      assert.equal(Number(updatedProduct.body.data.brand_id), brandId);
+
+      const stockedDelete = await request('DELETE', `/products/${stockedProductId}`);
+      assert.equal(stockedDelete.status, 200, stockedDelete.body.message);
+      assert.equal(stockedDelete.body.data.deactivated, true);
+      const stockPreservation = await databaseConnection(appDb);
+      try {
+        const [[product]] = await stockPreservation.execute(
+          'SELECT status, current_stock FROM products WHERE id = ?',
+          [stockedProductId]
+        );
+        const [[warehouseBalance]] = await stockPreservation.execute(
+          'SELECT quantity FROM warehouse_stock WHERE product_id = ? AND warehouse_id = ?',
+          [stockedProductId, warehouseId]
+        );
+        const [[movementCount]] = await stockPreservation.execute(
+          'SELECT COUNT(*) AS total FROM stock_movements WHERE product_id = ?',
+          [stockedProductId]
+        );
+        assert.deepEqual(
+          [product.status, Number(product.current_stock), Number(warehouseBalance.quantity), Number(movementCount.total)],
+          ['inactive', 2, 2, 1]
+        );
+      } finally {
+        await stockPreservation.end();
+      }
+      const referencedCategoryDelete = await request('DELETE', `/categories/${categoryId}`);
+      assert.equal(referencedCategoryDelete.status, 400);
+
+      const balanceOnlyProductResponse = await request('POST', '/products', {
+        sku: 'TEST-BALANCE-ONLY',
+        barcode: 'TEST-BAR-BALANCE-ONLY',
+        name: 'Warehouse Balance Only Product',
+        default_warehouse_id: warehouseId,
+        initial_stock: 0
+      });
+      assert.equal(balanceOnlyProductResponse.status, 201, balanceOnlyProductResponse.body.message);
+      const balanceOnlyProductId = balanceOnlyProductResponse.body.data.id;
+      const balanceOnlyFixture = await databaseConnection(appDb);
+      try {
+        await balanceOnlyFixture.execute(
+          'INSERT INTO warehouse_stock (warehouse_id, product_id, quantity) VALUES (?, ?, 1)',
+          [warehouseId, balanceOnlyProductId]
+        );
+      } finally {
+        await balanceOnlyFixture.end();
+      }
+      const balanceOnlyDelete = await request('DELETE', `/products/${balanceOnlyProductId}`);
+      assert.equal(balanceOnlyDelete.status, 200, balanceOnlyDelete.body.message);
+      assert.equal(balanceOnlyDelete.body.data.deactivated, true);
+      const preservedBalance = await databaseConnection(appDb);
+      try {
+        const [[product]] = await preservedBalance.execute(
+          'SELECT status FROM products WHERE id = ?',
+          [balanceOnlyProductId]
+        );
+        const [[balance]] = await preservedBalance.execute(
+          'SELECT quantity FROM warehouse_stock WHERE product_id = ? AND warehouse_id = ?',
+          [balanceOnlyProductId, warehouseId]
+        );
+        assert.deepEqual([product.status, Number(balance.quantity)], ['inactive', 1]);
+      } finally {
+        await preservedBalance.end();
+      }
+
+      const emptyProductResponse = await request('POST', '/products', {
+        sku: 'TEST-EMPTY-DELETE',
+        barcode: 'TEST-BAR-EMPTY-DELETE',
+        name: 'Empty Product Safe Delete',
+        default_warehouse_id: warehouseId,
+        initial_stock: 0
+      });
+      assert.equal(emptyProductResponse.status, 201, emptyProductResponse.body.message);
+      const emptyProductDelete = await request('DELETE', `/products/${emptyProductResponse.body.data.id}`);
+      assert.equal(emptyProductDelete.status, 200, emptyProductDelete.body.message);
+      const deletedProductRead = await request('GET', `/products/${emptyProductResponse.body.data.id}`);
+      assert.equal(deletedProductRead.status, 404);
+
+      const purchaseProductResponse = await request('POST', '/products', {
+        sku: 'TEST-PURCHASE-STOCK',
+        barcode: 'TEST-BAR-PURCHASE-STOCK',
+        name: 'Purchase Workflow Product',
+        category_id: categoryId,
+        brand_id: brandId,
+        supplier_id: supplierId,
+        default_warehouse_id: warehouseId,
+        purchase_price: 5,
+        selling_price: 10,
+        initial_stock: 0
+      });
+      assert.equal(purchaseProductResponse.status, 201, purchaseProductResponse.body.message);
+      const purchaseProductId = purchaseProductResponse.body.data.id;
+      const purchaseResponse = await request('POST', '/purchases', {
+        supplier_id: supplierId,
+        warehouse_id: warehouseId,
+        purchase_date: '2026-01-02',
+        items: [{ product_id: purchaseProductId, quantity: 4, purchase_price: 5 }],
+        paid_amount: 20,
+        payment_method: 'Cash'
+      });
+      assert.equal(purchaseResponse.status, 201, purchaseResponse.body.message);
+      const purchaseId = purchaseResponse.body.data.id;
+      const purchaseDetails = await request('GET', `/purchases/${purchaseId}`);
+      assert.equal(purchaseDetails.status, 200);
+      assert.equal(Number(purchaseDetails.body.data.supplier_id), supplierId);
+      assert.equal(Number(purchaseDetails.body.data.warehouse_id), warehouseId);
+      assert.equal(purchaseDetails.body.data.items.length, 1);
+      assert.equal(Number(purchaseDetails.body.data.items[0].product_id), purchaseProductId);
+      assert.equal(Number(purchaseDetails.body.data.items[0].quantity), 4);
+      assert.equal(purchaseDetails.body.data.payments.length, 1);
+
+      const purchaseStock = await databaseConnection(appDb);
+      try {
+        const [[product]] = await purchaseStock.execute(
+          'SELECT current_stock FROM products WHERE id = ?',
+          [purchaseProductId]
+        );
+        const [[warehouseBalance]] = await purchaseStock.execute(
+          'SELECT quantity FROM warehouse_stock WHERE product_id = ? AND warehouse_id = ?',
+          [purchaseProductId, warehouseId]
+        );
+        const [[movement]] = await purchaseStock.execute(
+          "SELECT quantity FROM stock_movements WHERE product_id = ? AND reference_type = 'purchase' AND reference_id = ?",
+          [purchaseProductId, purchaseId]
+        );
+        assert.deepEqual(
+          [Number(product.current_stock), Number(warehouseBalance.quantity), Number(movement.quantity)],
+          [4, 4, 4]
+        );
+      } finally {
+        await purchaseStock.end();
+      }
+
+      const purchaseSale = await request('POST', '/sales', makeSale(
+        customerId, warehouseId, purchaseProductId, 1, 10, 10
+      ));
+      assert.equal(purchaseSale.status, 201, purchaseSale.body.message);
+      const purchaseReturn = await request('POST', '/returns', {
+        return_type: 'Purchase Return',
+        reference_id: purchaseId,
+        warehouse_id: warehouseId,
+        items: [{ product_id: purchaseProductId, quantity: 1 }],
+        refund_amount: 5,
+        payment_method: 'Cash',
+        reason: 'Isolated supplier return'
+      }, { 'Idempotency-Key': crypto.randomUUID() });
+      assert.equal(purchaseReturn.status, 201, purchaseReturn.body.message);
+      const purchaseReconciliation = await databaseConnection(appDb);
+      try {
+        const [[purchase]] = await purchaseReconciliation.execute(
+          'SELECT total, paid_amount, remaining_amount FROM purchases WHERE id = ?',
+          [purchaseId]
+        );
+        const [[product]] = await purchaseReconciliation.execute(
+          'SELECT current_stock FROM products WHERE id = ?',
+          [purchaseProductId]
+        );
+        const [[warehouseBalance]] = await purchaseReconciliation.execute(
+          'SELECT quantity FROM warehouse_stock WHERE product_id = ? AND warehouse_id = ?',
+          [purchaseProductId, warehouseId]
+        );
+        const [[refund]] = await purchaseReconciliation.execute(
+          "SELECT amount FROM payments WHERE payment_type = 'Supplier Refund' AND reference_id = ?",
+          [purchaseReturn.body.data.id]
+        );
+        assert.deepEqual(
+          [Number(purchase.total), Number(purchase.paid_amount), Number(purchase.remaining_amount),
+            Number(product.current_stock), Number(warehouseBalance.quantity), Number(refund.amount)],
+          [15, 15, 0, 2, 2, 5]
+        );
+      } finally {
+        await purchaseReconciliation.end();
+      }
+
+      const invalidExpenseDate = await request('POST', '/expenses', {
+        category: 'E2E',
+        description: 'Reject invalid expense date',
+        amount: 1,
+        expense_date: '2026-02-30'
+      });
+      assert.equal(invalidExpenseDate.status, 400);
+      const invalidExpenseMethod = await request('POST', '/expenses', {
+        category: 'E2E',
+        description: 'Reject unsupported expense payment method',
+        amount: 1,
+        payment_method: 'Cheque'
+      });
+      assert.equal(invalidExpenseMethod.status, 400);
+
+      const expenseResponse = await request('POST', '/expenses', {
+        category: 'E2E Travel',
+        description: 'E2E supplier transport',
+        amount: 20,
+        payment_method: 'Cash',
+        expense_date: '2025-12-31'
+      });
+      assert.equal(expenseResponse.status, 201, expenseResponse.body.message);
+      const expenseId = expenseResponse.body.data.id;
+      const expenseUpdate = await request('PUT', `/expenses/${expenseId}`, {
+        amount: 22.5,
+        payment_method: 'Bank',
+        expense_date: '2026-01-01'
+      });
+      assert.equal(expenseUpdate.status, 200, expenseUpdate.body.message);
+      assert.equal(Number(expenseUpdate.body.data.amount), 22.5);
+      const filteredExpenses = await request(
+        'GET',
+        '/expenses?search=supplier%20transport&payment_method=Bank&start_date=2026-01-01&end_date=2026-01-01'
+      );
+      assert.equal(filteredExpenses.status, 200, filteredExpenses.body.message);
+      assert.equal(filteredExpenses.body.data.expenses.length, 1);
+      assert.equal(Number(filteredExpenses.body.data.total_amount), 22.5);
+      const expenseDelete = await request('DELETE', `/expenses/${expenseId}`);
+      assert.equal(expenseDelete.status, 200, expenseDelete.body.message);
+      const deletedExpenseSearch = await request('GET', '/expenses?search=supplier%20transport');
+      assert.equal(deletedExpenseSearch.status, 200);
+      assert.equal(deletedExpenseSearch.body.data.expenses.length, 0);
+
+      const readRoutes = [
+        '/dashboard/stats',
+        '/products?search=TEST',
+        '/categories?search=E2E',
+        '/brands?search=E2E',
+        '/warehouses?status=active',
+        '/suppliers?search=New',
+        '/customers?search=New',
+        '/purchases',
+        '/sales',
+        '/stock',
+        '/stock/movements',
+        '/stock/low',
+        '/transfers',
+        '/adjustments',
+        '/returns',
+        '/expenses',
+        '/payments',
+        '/invoices',
+        '/debts',
+        '/reports/sales',
+        '/reports/purchases',
+        '/reports/inventory',
+        '/reports/financial',
+        '/users',
+        '/users/audit-logs',
+        '/settings',
+        '/barcode/lookup/TEST-BAR-SALE',
+        '/barcode/generate-suggested'
+      ];
+      for (const route of readRoutes) {
+        const response = await request('GET', route);
+        assert.equal(response.status, 200, `${route}: ${response.body.message}`);
       }
 
       const unauthorizedSale = await fetch(`http://127.0.0.1:${port}/api/sales`, {
@@ -651,6 +945,16 @@ test('isolated database migrations preserve data and transactional workflows rem
       const returned = duplicateReturns.find(result => result.status === 201);
       const repeated = duplicateReturns.find(result => result.status === 200);
       assert.equal(repeated.body.data.id, returned.body.data.id);
+      const returnedStock = await databaseConnection(appDb);
+      try {
+        const [[balance]] = await returnedStock.execute(
+          'SELECT quantity FROM warehouse_stock WHERE warehouse_id = ? AND product_id = ?',
+          [warehouseId, saleProductId]
+        );
+        assert.equal(Number(balance.quantity), 5, 'sale return restores returned stock exactly once');
+      } finally {
+        await returnedStock.end();
+      }
 
       const concurrentReturns = await Promise.all([
         request('POST', '/returns', {

@@ -530,27 +530,40 @@ async function deleteProduct(req, res, next) {
       return error(res, 'Product not found', 404);
     }
 
-    // Check if product is referenced in sales or purchases
+    // Preserve inventory and transaction history by deactivating linked products.
     const [salesRef] = await query('SELECT COUNT(*) as count FROM sale_items WHERE product_id = ?', [id]);
     const [purchRef] = await query('SELECT COUNT(*) as count FROM purchase_items WHERE product_id = ?', [id]);
+    const [warehouseStockRef] = await query(
+      'SELECT COUNT(*) as count FROM warehouse_stock WHERE product_id = ? AND quantity <> 0',
+      [id]
+    );
+    const [movementRef] = await query('SELECT COUNT(*) as count FROM stock_movements WHERE product_id = ?', [id]);
+    const [returnRef] = await query('SELECT COUNT(*) as count FROM return_items WHERE product_id = ?', [id]);
+    const [adjustmentRef] = await query('SELECT COUNT(*) as count FROM stock_adjustments WHERE product_id = ?', [id]);
+    const [transferRef] = await query('SELECT COUNT(*) as count FROM stock_transfer_items WHERE product_id = ?', [id]);
 
-    if (salesRef.count > 0 || purchRef.count > 0) {
-      // Deactivate instead of deleting to maintain historical reporting integrity
+    if (Number(existing[0].current_stock) !== 0 ||
+        salesRef.count > 0 ||
+        purchRef.count > 0 ||
+        warehouseStockRef.count > 0 ||
+        movementRef.count > 0 ||
+        returnRef.count > 0 ||
+        adjustmentRef.count > 0 ||
+        transferRef.count > 0) {
       await query('UPDATE products SET status = "inactive" WHERE id = ?', [id]);
       await logAction({
         userId: req.user ? req.user.id : null,
         userName: req.user ? req.user.name : 'System',
         action: 'Deactivate Product',
         module: 'Products',
-        details: `Product ID ${id} deactivated because it contains historical transactions.`,
+        details: `Product ID ${id} deactivated because it has stock or linked history.`,
         ip: req.ip
       });
-      return success(res, { deactivated: true }, 'Product has linked transactions and was set to inactive status');
+      return success(res, { deactivated: true }, 'Product has stock or linked history and was set to inactive status');
     }
 
-    // Safe to hard delete
+    // Only products with no stock or linked history can be permanently removed.
     await query('DELETE FROM warehouse_stock WHERE product_id = ?', [id]);
-    await query('DELETE FROM stock_movements WHERE product_id = ?', [id]);
     await query('DELETE FROM products WHERE id = ?', [id]);
 
     await logAction({

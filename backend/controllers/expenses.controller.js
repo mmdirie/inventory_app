@@ -3,6 +3,17 @@ const { success, error } = require('../utils/response');
 const { logAction } = require('../utils/logger');
 const { validateRequired, validateId, parsePagination, parseStrictNumber } = require('../validators/input.validator');
 
+const PAYMENT_METHODS = new Set(['Cash', 'Bank', 'Mobile Money', 'Other']);
+
+function isValidExpenseDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const year = Number(value.slice(0, 4));
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return year >= 1000 && !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 /**
  * GET /api/expenses
  */
@@ -85,9 +96,19 @@ async function createExpense(req, res, next) {
       return error(res, `Missing required fields: ${missing.join(', ')}`, 400);
     }
 
+    if (typeof category !== 'string' || typeof description !== 'string') {
+      return error(res, 'Expense category and description must be text', 400);
+    }
+
     const amountVal = parseStrictNumber(amount, 0.01);
     if (amountVal === null) {
       return error(res, 'Expense amount must be a positive number', 400);
+    }
+    if (!PAYMENT_METHODS.has(payment_method)) {
+      return error(res, 'Invalid expense payment method', 400);
+    }
+    if (!isValidExpenseDate(expense_date)) {
+      return error(res, 'Expense date must be a valid date in YYYY-MM-DD format', 400);
     }
 
     const userId = req.user ? req.user.id : null;
@@ -132,12 +153,24 @@ async function updateExpense(req, res, next) {
     }
     const { category, description, amount, payment_method, expense_date, notes } = req.body;
 
+    if (category !== undefined && typeof category !== 'string') {
+      return error(res, 'Expense category must be text', 400);
+    }
+    if (description !== undefined && typeof description !== 'string') {
+      return error(res, 'Expense description must be text', 400);
+    }
     let amountVal = null;
     if (amount !== undefined) {
       amountVal = parseStrictNumber(amount, 0.01);
       if (amountVal === null) {
         return error(res, 'Expense amount must be a positive number', 400);
       }
+    }
+    if (payment_method !== undefined && !PAYMENT_METHODS.has(payment_method)) {
+      return error(res, 'Invalid expense payment method', 400);
+    }
+    if (expense_date !== undefined && !isValidExpenseDate(expense_date)) {
+      return error(res, 'Expense date must be a valid date in YYYY-MM-DD format', 400);
     }
 
     const existing = await query('SELECT * FROM expenses WHERE id = ?', [id]);
