@@ -107,6 +107,30 @@ test('strict numeric parsing rejects malformed trade values before they reach th
   assert.equal(parseStrictPositiveInteger('7'), 7);
 });
 
+test('suggested EAN-13 barcodes contain twelve payload digits and a valid check digit', () => {
+  const { createEan13Candidate } = require('../backend/controllers/barcode.controller');
+  const barcode = createEan13Candidate();
+  const weightedSum = [...barcode].reduce(
+    (sum, digit, index) => sum + Number(digit) * (index % 2 === 0 ? 1 : 3),
+    0
+  );
+
+  assert.match(barcode, /^890\d{10}$/);
+  assert.equal(barcode.length, 13);
+  assert.equal(weightedSum % 10, 0);
+});
+
+test('barcode manager escapes database values in all rendered catalog views', () => {
+  const source = fs.readFileSync(path.join(projectRoot, 'frontend', 'barcode', 'index.html'), 'utf8');
+
+  assert.match(source, /UI\.escape\(p\.name\)/);
+  assert.match(source, /UI\.escape\(prod\.name\)/);
+  assert.match(source, /UI\.escape\(w\.warehouse_name\)/);
+  assert.match(source, /UI\.escape\(err\.message/);
+  assert.doesNotMatch(source, /(?:<[^>]*>|<\/[^>]*>)\$\{(?:p|prod|w)\.(?:name|sku|barcode|warehouse_name)\}/);
+  assert.doesNotMatch(source, /<div class="title">\$\{subtext\}/);
+});
+
 test('isolated database migrations preserve data and transactional workflows remain consistent', {
   skip: testDatabaseAllowed
     ? false

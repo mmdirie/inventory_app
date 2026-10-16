@@ -256,9 +256,9 @@
           <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
             <div class="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
               <div>
-                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 uppercase tracking-wider">${p.sku}</span>
-                <h2 class="text-lg font-black text-slate-900 mt-1">${p.name}</h2>
-                <p class="text-xs text-slate-500">${p.category_name || 'General'} · ${p.brand_name || 'No Brand'}</p>
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 uppercase tracking-wider">${UI.escape(p.sku)}</span>
+                <h2 class="text-lg font-black text-slate-900 mt-1">${UI.escape(p.name)}</h2>
+                <p class="text-xs text-slate-500">${UI.escape(p.category_name || 'General')} · ${UI.escape(p.brand_name || 'No Brand')}</p>
               </div>
               <div class="text-right">
                 <span class="text-xs font-bold uppercase text-slate-400">Retail Price</span>
@@ -269,19 +269,19 @@
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div class="p-3 bg-slate-50 rounded-xl">
                 <span class="text-slate-400 block text-[10px] uppercase font-bold">Barcode</span>
-                <span class="font-mono font-bold text-slate-800">${p.barcode}</span>
+                <span class="font-mono font-bold text-slate-800">${UI.escape(p.barcode)}</span>
               </div>
               <div class="p-3 bg-slate-50 rounded-xl">
                 <span class="text-slate-400 block text-[10px] uppercase font-bold">Total Stock</span>
-                <span class="font-bold text-slate-800">${p.current_stock} ${p.unit}</span>
+                <span class="font-bold text-slate-800">${UI.escape(p.current_stock)} ${UI.escape(p.unit)}</span>
               </div>
               <div class="p-3 bg-slate-50 rounded-xl">
                 <span class="text-slate-400 block text-[10px] uppercase font-bold">Min Level</span>
-                <span class="font-bold text-slate-800">${p.min_stock_level} ${p.unit}</span>
+                <span class="font-bold text-slate-800">${UI.escape(p.min_stock_level)} ${UI.escape(p.unit)}</span>
               </div>
               <div class="p-3 bg-slate-50 rounded-xl">
                 <span class="text-slate-400 block text-[10px] uppercase font-bold">Status</span>
-                <span class="font-bold capitalize ${p.status === 'active' ? 'text-emerald-600' : 'text-slate-500'}">${p.status}</span>
+                <span class="font-bold capitalize ${p.status === 'active' ? 'text-emerald-600' : 'text-slate-500'}">${UI.escape(p.status)}</span>
               </div>
             </div>
 
@@ -295,8 +295,8 @@
               <div class="divide-y divide-slate-100 text-xs">
                 ${stockRows.length ? stockRows.map(w => `
                   <div class="py-2 flex justify-between items-center">
-                    <span class="text-slate-600">${w.warehouse_name}</span>
-                    <span class="font-bold text-slate-900">${w.quantity} ${p.unit}</span>
+                    <span class="text-slate-600">${UI.escape(w.warehouse_name)}</span>
+                    <span class="font-bold text-slate-900">${UI.escape(w.quantity)} ${UI.escape(p.unit)}</span>
                   </div>
                 `).join('') : '<p class="text-slate-400 text-xs py-2">No individual warehouse distribution logged.</p>'}
               </div>
@@ -320,7 +320,7 @@
         lookupResult.innerHTML = `
           <div class="bg-rose-50 border border-rose-200 rounded-xl p-4 text-xs text-rose-700 flex items-center gap-2">
             <i class="fa-solid fa-circle-exclamation text-base"></i>
-            <span>${err.message || 'Product not found'}</span>
+            <span>${UI.escape(err.message || 'Product not found')}</span>
           </div>
         `;
       }
@@ -337,7 +337,7 @@
         renderLiveBarcode();
         Toast.success(`Suggested unique barcode: ${code}`);
       } catch (err) {
-        Toast.error('Could not generate barcode candidate');
+        Toast.error(`Could not generate barcode candidate: ${err.message}`);
       }
     }
 
@@ -387,29 +387,46 @@
       const val = document.getElementById('gen-val').value.trim();
       const subtext = document.getElementById('gen-label-text').value.trim();
       const printWin = window.open('', '_blank');
+      if (!printWin) {
+        Toast.error('Allow pop-ups to print this barcode label.');
+        return;
+      }
+
       printWin.document.write(`
         <html>
         <head>
           <title>Print Label</title>
-          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
           <style>
             body { margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; font-family: sans-serif; }
             .label { width: 60mm; height: 38mm; border: 1px solid #ccc; padding: 6px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
             .title { font-size: 11px; font-weight: bold; margin-top: 4px; }
           </style>
         </head>
-        <body onload="window.print(); window.close();">
+        <body>
           <div class="label">
             <svg id="print-svg"></svg>
-            <div class="title">${subtext}</div>
+            <div id="print-title" class="title"></div>
           </div>
-          <script>
-            JsBarcode("#print-svg", "${val}", { format: "CODE128", width: 1.8, height: 45, displayValue: true, fontSize: 12 });
-          <\/script>
         </body>
         </html>
       `);
       printWin.document.close();
+      printWin.document.getElementById('print-title').textContent = subtext;
+      try {
+        JsBarcode(printWin.document.getElementById('print-svg'), val, {
+          format: 'CODE128',
+          width: 1.8,
+          height: 45,
+          displayValue: true,
+          fontSize: 12
+        });
+        printWin.focus();
+        printWin.print();
+        printWin.close();
+      } catch (err) {
+        printWin.close();
+        Toast.error(`Could not render barcode label: ${err.message}`);
+      }
     }
 
     // ── TAB 3: BATCH LABEL PRINT ─────────────────────────────────────────────
@@ -421,7 +438,7 @@
         // Fill generator select
         const genSelect = document.getElementById('gen-prod-select');
         genSelect.innerHTML = '<option value="">-- Choose from catalog or enter custom below --</option>' + 
-          cachedProducts.map(p => `<option value="${p.id}">${p.name} (${p.sku})</option>`).join('');
+          cachedProducts.map(p => `          <option value="${UI.escape(p.id)}">${UI.escape(p.name)} (${UI.escape(p.sku)})</option>`).join('');
 
         // Fill batch table
         const tbody = document.getElementById('batch-products-tbody');
@@ -433,14 +450,14 @@
         tbody.innerHTML = cachedProducts.map((p, idx) => `
           <tr class="hover:bg-slate-50/80 transition">
             <td class="p-3 text-center">
-              <input type="checkbox" class="batch-chk rounded" data-id="${p.id}" onchange="updateBatchCount()" />
+              <input type="checkbox" class="batch-chk rounded" data-id="${UI.escape(p.id)}" onchange="updateBatchCount()" />
             </td>
-            <td class="p-3 font-semibold text-slate-900">${p.name}</td>
-            <td class="p-3 font-mono text-slate-600">${p.sku}</td>
-            <td class="p-3 font-mono font-bold text-slate-800">${p.barcode || '—'}</td>
+            <td class="p-3 font-semibold text-slate-900">${UI.escape(p.name)}</td>
+            <td class="p-3 font-mono text-slate-600">${UI.escape(p.sku)}</td>
+            <td class="p-3 font-mono font-bold text-slate-800">${UI.escape(p.barcode || '—')}</td>
             <td class="p-3 font-bold text-emerald-600">$${parseFloat(p.selling_price).toFixed(2)}</td>
             <td class="p-3">
-              <input type="number" min="1" max="100" value="1" id="batch-qty-${p.id}" class="w-16 px-2 py-1 text-xs border border-slate-200 rounded-lg text-center" />
+              <input type="number" min="1" max="100" value="1" id="batch-qty-${UI.escape(p.id)}" class="w-16 px-2 py-1 text-xs border border-slate-200 rounded-lg text-center" />
             </td>
           </tr>
         `).join('');
@@ -448,6 +465,9 @@
         updateBatchCount();
       } catch (err) {
         console.error(err);
+        document.getElementById('batch-products-tbody').innerHTML =
+          `<tr><td colspan="6" class="p-6 text-center text-rose-600">${UI.escape(err.message)}</td></tr>`;
+        Toast.error(`Failed to load barcode products: ${err.message}`);
       }
     }
 
@@ -491,7 +511,7 @@
           labelDiv.className = 'barcode-label';
           labelDiv.innerHTML = `
             <div style="font-size:10px; font-weight:bold; max-width:55mm; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-              ${prod.name}
+              ${UI.escape(prod.name)}
             </div>
             <svg id="${svgId}"></svg>
             <div style="font-size:11px; font-weight:900; color:#059669;">

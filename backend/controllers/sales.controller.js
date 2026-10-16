@@ -196,8 +196,9 @@ async function getSaleById(req, res, next) {
  * Process Complete Sale / POS Transaction Atomically
  */
 async function createSale(req, res, next) {
-  const conn = await getTransactionConnection();
+  let conn;
   try {
+    conn = await getTransactionConnection();
     const {
       customer_id,
       warehouse_id,
@@ -613,10 +614,16 @@ async function createSale(req, res, next) {
 
     return success(res, saleResponse, 'Sale completed successfully and invoice generated', 201);
   } catch (err) {
-    await conn.rollback();
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch (rollbackError) {
+        console.error('[SALE ROLLBACK ERROR]', rollbackError.message);
+      }
+    }
     next(err);
   } finally {
-    conn.release();
+    if (conn) conn.release();
   }
 }
 

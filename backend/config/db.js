@@ -22,8 +22,13 @@ async function query(sql, params = []) {
 // Helper to acquire client for multi-statement atomic transactions
 async function getTransactionConnection() {
   const connection = await pool.getConnection();
-  await connection.beginTransaction();
-  return connection;
+  try {
+    await connection.beginTransaction();
+    return connection;
+  } catch (err) {
+    connection.release();
+    throw err;
+  }
 }
 
 module.exports = {

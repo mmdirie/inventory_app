@@ -1,6 +1,17 @@
 const { query } = require('../config/db');
 const { success, error } = require('../utils/response');
 
+function createEan13Candidate() {
+  const payload = `890${Math.floor(100000000 + Math.random() * 900000000)}`;
+  let sum = 0;
+  for (let i = 0; i < payload.length; i++) {
+    const digit = Number(payload[i]);
+    sum += i % 2 === 0 ? digit : digit * 3;
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return `${payload}${checkDigit}`;
+}
+
 /**
  * GET /api/barcode/lookup/:code
  */
@@ -52,15 +63,7 @@ async function generateSuggestedBarcode(req, res, next) {
 
     while (exists && attempts < 10) {
       attempts++;
-      // Generate a 12-digit code and calculate check digit
-      const random11 = '890' + Math.floor(10000000 + Math.random() * 90000000);
-      let sum = 0;
-      for (let i = 0; i < random11.length; i++) {
-        const d = parseInt(random11[i], 10);
-        sum += (i % 2 === 0) ? d : d * 3;
-      }
-      const checkDigit = (10 - (sum % 10)) % 10;
-      barcode = `${random11}${checkDigit}`;
+      barcode = createEan13Candidate();
 
       const rows = await query('SELECT id FROM products WHERE barcode = ?', [barcode]);
       if (rows.length === 0) {
@@ -80,5 +83,6 @@ async function generateSuggestedBarcode(req, res, next) {
 
 module.exports = {
   lookupBarcode,
-  generateSuggestedBarcode
+  generateSuggestedBarcode,
+  createEan13Candidate
 };
